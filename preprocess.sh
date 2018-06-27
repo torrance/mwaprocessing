@@ -10,6 +10,7 @@
 #SBATCH --export=NONE
 
 set -e
+set -x
 
 if command -v module < /dev/null; then
 	module load pyfits
@@ -20,6 +21,4 @@ make_metafits.py --gps=${obsid}
 
 cotter -m ${obsid}.metafits -freqres 40 -timeres 4 -m ${obsid}.metafits -allowmissing -o ${obsid}.ms *gpubox*.fits
 
-/home/torrance/srclist_by_beam.py --aocalibrate -x -m ${obsid}.metafits -s /home/torrance/srclist_pumav3_EoR0aegean_EoR1pietro+ForA.txt -n 1000
-
-calibrate -minuv 60 -m srclist_pumav3_EoR0aegean_EoR1pietro+ForA_${obsid}_aocal1000.txt -applybeam -j 20 -i 500 ${obsid}.ms solutions.bin
+rm *gpubox*.fits

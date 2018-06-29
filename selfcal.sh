@@ -28,7 +28,9 @@ chgcentre -minw -shiftback ${obsid}.ms
 # scale = 0.5 / chan
 wsclean -name wsclean-${suffix} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs 0 -size 8000 8000 -scale 0.0034 -niter 1000000 -auto-threshold 5 -auto-mask 8 ${obsid}.ms
 
-beam -2016 -proto wsclean-${suffix}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits
+if [[ ! -f beam-xxi.fits ]]; then
+	beam -2016 -proto wsclean-${suffix}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits
+fi
 
 pbcorrect wsclean-${suffix} image.fits beam stokes-${suffix}
 

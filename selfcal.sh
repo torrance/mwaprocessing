@@ -20,6 +20,8 @@ if [ -z "$suffix" ]; then
 	exit 1
 fi
 
+touch selfcal${suffix}_started
+
 # Do a shallow clean, to be used for selfcal
 
 # scale = 0.5 / chan

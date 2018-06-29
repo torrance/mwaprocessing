@@ -1,6 +1,6 @@
 #! /bin/bash
 #SBATCH -M galaxy
-#SBATCH --time=08:00:00
+#SBATCH --time=12:00:00
 #SBATCH --partition workq
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -13,33 +13,44 @@ set -e
 set -x
 
 obsid=$1
-suffix=$2
+iterations=$2
 
-if [ -z "$suffix" ]; then
-	echo "Suffix not set!"
+if [[ ! -z $ABSMEM ]]; then
+	absmem="-absmem ${ABSMEM}"
+else
+	absmem=""
+fi
+
+if [ -z "$iterations" ]; then
+	echo "Iterations not set!"
 	exit 1
 fi
 
-touch selfcal${suffix}_started
+touch selfcal_started
 
-# Do a shallow clean, to be used for selfcal
-chgcentre -minw -shiftback ${obsid}.ms
+for i in $(seq 1 $iterations); do
+	# First chg phase centre to increase wsclean speed
+	chgcentre -minw -shiftback ${obsid}.ms
 
-# scale = 0.5 / chan
-wsclean -name wsclean-${suffix} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs 0 -size 8000 8000 -scale 0.0034 -niter 1000000 -auto-threshold 5 -auto-mask 8 ${obsid}.ms
+	# Do a shallow clean, to be used for selfcal
+	# scale = 0.5 / chan
+	wsclean -name wsclean-${i} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs 0 -size 6000 6000 -scale 0.0034 -niter 1000000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
 
-if [[ ! -f beam-xxi.fits ]]; then
-	beam -2016 -proto wsclean-${suffix}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits
-fi
+	# Create a beam if it doesn't already exist
+	if [[ ! -f beam-xxi.fits ]]; then
+		beam -2016 -proto wsclean-${i}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits
+	fi
 
-pbcorrect wsclean-${suffix} image.fits beam stokes-${suffix}
+	# Output image of selfcal
+	pbcorrect wsclean-${i} image.fits beam stokes-${suffix}
 
-# Selfcal
+	# Selfcal
 
-calibrate -minuv 60 -j 20 -i 500 ${obsid}.ms selfcal-solutions-${suffix}.bin
+	calibrate -minuv 60 -j 20 -i 500 $absmem ${obsid}.ms selfcal-solutions-${i}.bin
 
-applysolutions ${obsid}.ms selfcal-solutions-${suffix}.bin
+	applysolutions ${obsid}.ms selfcal-solutions-${i}.bin
 
-aoflagger ${obsid}.ms
+	aoflagger ${obsid}.ms
+done
 
-rm selfcal${suffix}_started && touch selfcal${suffix}_complete
+rm selfcal_started && touch selfcal_complete

@@ -6,7 +6,7 @@
 #SBATCH --mail-type FAIL,TIME_LIMIT,TIME_LIMIT_90
 #SBATCH --mail-user torrance.hodgson@postgrad.curtin.edu.au
 #SBATCH --export=NONE
-#SBATCH --time=00:01:00
+#SBATCH --time=01:00:00
 
 set -e
 set -x

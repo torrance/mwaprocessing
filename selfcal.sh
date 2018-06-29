@@ -1,6 +1,6 @@
 #! /bin/bash
 #SBATCH -M galaxy
-#SBATCH --time=12:00:00
+#SBATCH --time=08:00:00
 #SBATCH --partition workq
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1

@@ -11,3 +11,4 @@
 set -e
 set -x
 obsdownload.py -o $1
+touch $1/download_complete

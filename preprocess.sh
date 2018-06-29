@@ -17,8 +17,10 @@ if command -v module < /dev/null; then
 fi
 
 obsid=$1
+touch preprocess_started
 make_metafits.py --gps=${obsid}
 
 cotter -m ${obsid}.metafits -freqres 40 -timeres 4 -m ${obsid}.metafits -allowmissing -o ${obsid}.ms *gpubox*.fits
 
 rm *gpubox*.fits
+rm preprocess_started && touch preprocess_complete

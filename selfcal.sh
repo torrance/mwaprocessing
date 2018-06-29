@@ -36,3 +36,5 @@ calibrate -minuv 60 -j 20 -i 500 ${obsid}.ms selfcal-solutions-${suffix}.bin
 applysolutions ${obsid}.ms selfcal-solutions-${suffix}.bin
 
 aoflagger ${obsid}.ms
+
+rm selfcal${suffix}_started && touch selfcal${suffix}_complete

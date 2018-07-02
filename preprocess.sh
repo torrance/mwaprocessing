@@ -39,4 +39,6 @@ for i in {1..2}; do
 	aoflagger ${obsid}.ms
 done
 
+aocal_plot.py solutions.bin
+
 rm preprocess_started && touch preprocess_complete

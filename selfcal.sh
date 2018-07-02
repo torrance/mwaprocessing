@@ -13,7 +13,7 @@ set -e
 set -x
 
 obsid=$1
-iterations=$2
+i=$2
 
 if [[ ! -z $ABSMEM ]]; then
 	absmem="-absmem ${ABSMEM}"
@@ -21,36 +21,37 @@ else
 	absmem=""
 fi
 
-if [ -z "$iterations" ]; then
+if [ -z "$i" ]; then
 	echo "Iterations not set!"
 	exit 1
 fi
 
 touch selfcal_started
 
-for i in $(seq 1 $iterations); do
-	# First chg phase centre to increase wsclean speed
+# First chg phase centre to increase wsclean speed
+if [[ ! -f chgcentred ]]; then
 	chgcentre -minw -shiftback ${obsid}.ms
+	touch chgcentred
+fi
 
-	# Do a shallow clean, to be used for selfcal
-	# scale = 0.5 / chan
-	wsclean -name wsclean-${i} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs 0 -size 6000 6000 -scale 0.0034 -niter 1000000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
+# Do a shallow clean, to be used for selfcal
+# scale = 0.5 / chan
+wsclean -name wsclean-${i} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs 0 -size 8000 8000 -scale 0.0034 -niter 1000000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
 
-	# Create a beam if it doesn't already exist
-	if [[ ! -f beam-xxi.fits ]]; then
-		beam -2016 -proto wsclean-${i}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits
-	fi
+# Create a beam if it doesn't already exist
+if [[ ! -f beam-xxi.fits ]]; then
+	beam -2016 -proto wsclean-${i}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits
+fi
 
-	# Output image of selfcal
-	pbcorrect wsclean-${i} image.fits beam stokes-${suffix}
+# Output image of selfcal
+pbcorrect wsclean-${i} image.fits beam stokes-${i}
 
-	# Selfcal
+# Selfcal
 
-	calibrate -minuv 60 -j 20 -i 500 $absmem ${obsid}.ms selfcal-solutions-${i}.bin
+calibrate -minuv 60 -j 20 -i 500 $absmem ${obsid}.ms selfcal-solutions-${i}.bin
 
-	applysolutions ${obsid}.ms selfcal-solutions-${i}.bin
+applysolutions ${obsid}.ms selfcal-solutions-${i}.bin
 
-	aoflagger ${obsid}.ms
-done
+aoflagger ${obsid}.ms
 
 rm selfcal_started && touch selfcal_complete

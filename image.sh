@@ -14,7 +14,10 @@ set -x
 
 obsid=$1
 
-chgcentre -minw -shiftback ${obsid}.ms
+if [[ ! -f chgcentred ]]; then
+	chgcentre -minw -shiftback ${obsid}.ms
+	touch chgcentred
+fi
 
 wsclean -name wsclean-final -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs 0 -size 8000 8000 -scale 0.0034 -niter 1000000 -auto-threshold 1 -auto-mask 3 ${obsid}.ms
 

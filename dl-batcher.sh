@@ -3,6 +3,11 @@
 set -e
 set -x
 
-grep -v '^#' obsid.txt | while read obsid; do
+if [[ -z $1 ]]; then
+  echo "No obsid file specified"
+  exit 1
+fi
+
+grep -v '^#' $1 | while read obsid; do
   sbatch dl.sh $obsid
 done

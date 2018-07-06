@@ -7,13 +7,13 @@
 #SBATCH -c 20
 #SBATCH --mail-type FAIL,TIME_LIMIT,TIME_LIMIT_90
 #SBATCH --mail-user torrance.hodgson@postgrad.curtin.edu.au
-#SBATCH --export=NONE
+#SBATCH --export=ABSMEM
 
 set -e
 set -x
 
 if command -v module < /dev/null; then
-	module load pyfits
+  module load pyfits
 fi
 
 if [[ ! -z $ABSMEM ]]; then
@@ -24,7 +24,12 @@ fi
 
 obsid=$1
 
+rm postprocess_scheduled || true
 touch cal_started
+
+if [[ -f badantennae ]]; then
+  cat badantennae | xargs flagantennae ${obsid}.ms
+fi
 
 /home/torrance/srclist_by_beam.py --aocalibrate -x -m ${obsid}.metafits -s /home/torrance/srclist_pumav3_EoR0aegean_EoR1pietro+ForA.txt -n 1000
 

@@ -9,5 +9,9 @@ if [[ -z $1 ]]; then
 fi
 
 grep -v '^#' $1 | while read obsid; do
-  sbatch dl.sh $obsid
+  if [[ -f $obsid/download_started || -f $obsid/download_complete ]]; then
+    echo "Skipping $obsid"
+    continue
+  fi
+  sbatch -J "dl.sh $obsid" dl.sh $obsid
 done

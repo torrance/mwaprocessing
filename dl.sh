@@ -6,9 +6,13 @@
 #SBATCH --mail-type FAIL,TIME_LIMIT,TIME_LIMIT_90
 #SBATCH --mail-user torrance.hodgson@postgrad.curtin.edu.au
 #SBATCH --export=NONE
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 
 set -e
 set -x
+if [[ ! -d $1 ]]; then
+  mkdir $1
+fi
+touch $1/download_started
 obsdownload.py -o $1
-touch $1/download_complete
+rm $1/download_started && touch $1/download_complete

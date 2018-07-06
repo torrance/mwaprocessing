@@ -9,12 +9,13 @@ if [[ -z $1 ]]; then
 fi
 
 grep -v '^#' $1 | while read obsid; do
-  if [[ -f $obsid/cal_started || -f $obsid/cal_complete ]]; then
+  if [[ ! -f $obsid/badantennae || ! -f  $obsid/preprocess_complete || -f $obsid/postprocess_scheduled || -f $obsid/cal_started || -f $obsid/cal_complete ]]; then
     continue
   fi
 
-  jobid=$(sbatch --workdir $obsid cal.sh $obsid | cut -d ' ' -f 4)
-  jobid=$(sbatch --workdir $obsid -d afterok:$jobid selfcal.sh $obsid 1 | cut -d ' ' -f 4)
-  jobid=$(sbatch --workdir $obsid -d afterok:$jobid selfcal.sh $obsid 2 | cut -d ' ' -f 4)
-  jobid=$(sbatch --workdir $obsid -d afterok:$jobid image.sh $obsid)
+  touch $obsid/postprocess_scheduled
+  jobid=$(sbatch -J "cal.sh $obsid" --workdir $obsid cal.sh $obsid | cut -d ' ' -f 4)
+  jobid=$(sbatch -J "selfcal.sh $obsid 1" --workdir $obsid -d afterok:$jobid selfcal.sh $obsid 1 | cut -d ' ' -f 4)
+  jobid=$(sbatch -J "selfcal.sh $obsid 2" --workdir $obsid -d afterok:$jobid selfcal.sh $obsid 2 | cut -d ' ' -f 4)
+  jobid=$(sbatch -J "image.sh $obsid" --workdir $obsid -d afterok:$jobid image.sh $obsid)
 done

@@ -19,7 +19,7 @@ if [[ -z $weight ]]; then
   echo "No CLEAN weighting specified"
   exit 1
 fi
-name=$(echo $weight | tr -d '[:spaces:]')
+name=$(echo $weight | tr -d '[:space:]')
 
 touch image_${name}_started
 

@@ -33,9 +33,10 @@ if [[ -f badantennae ]]; then
   cat badantennae | xargs flagantennae ${obsid}.ms
 fi
 
-/home/torrance/srclist_by_beam.py --aocalibrate -x -m ${obsid}.metafits -s /home/torrance/srclist_pumav3_EoR0aegean_EoR1pietro+ForA.txt -n 1000
+srclist_by_beam.py -x -m ${obsid}.metafits -s /home/torrance/srclist_pumav3_EoR0aegean_EoR1pietro+ForA.txt -n 1000
+cat srclist_pumav3_EoR0aegean_EoR1pietro+ForA_${obsid}_peel1000.txt | rts_to_skymodel.py > model.txt
 
-calibrate $absmem -minuv 60 -maxuv 2600 -m srclist_pumav3_EoR0aegean_EoR1pietro+ForA_${obsid}_aocal1000.txt -applybeam -j 20 -i 500 ${obsid}.ms solutions.bin
+calibrate $absmem -minuv 60 -maxuv 2600 -m model.txt -applybeam -j 20 -i 500 ${obsid}.ms solutions.bin
 
 applysolutions ${obsid}.ms solutions.bin
 

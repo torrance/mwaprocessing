@@ -36,7 +36,7 @@ fi
 
 # Do a shallow clean, to be used for selfcal
 # scale = 0.5 / chan
-wsclean -name wsclean-${i} -j 20 -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight uniform -size 8000 8000 -scale 0.0034 -niter 1000000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
+wsclean -name wsclean-${i} -j 20 -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs 0 -size 8000 8000 -scale 0.0034 -niter 1000000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
 
 # Create a beam if it doesn't already exist
 if [[ ! -f beam-xxi.fits ]]; then

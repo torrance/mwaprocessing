@@ -27,6 +27,7 @@ fi
 obsid=$1
 
 rm postprocess_scheduled || true
+rm recal_scheduled || true
 touch cal_started
 
 if [[ -f badantennae ]]; then

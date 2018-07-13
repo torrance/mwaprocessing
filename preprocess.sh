@@ -13,7 +13,9 @@ set -e
 set -x
 
 if command -v module < /dev/null; then
+  set +x
   module load pyfits
+  set -x
 fi
 
 if [[ ! -z $ABSMEM ]]; then

@@ -26,7 +26,7 @@ if [ -z "$i" ]; then
   exit 1
 fi
 
-touch selfcal_started
+touch selfcal_${i}_started
 
 # First chg phase centre to increase wsclean speed
 if [[ ! -f chgcentred ]]; then
@@ -54,4 +54,4 @@ applysolutions ${obsid}.ms selfcal-solutions-${i}.bin
 
 aoflagger ${obsid}.ms
 
-rm selfcal_started && touch selfcal_complete
+rm selfcal_${i}_started && touch selfcal_${i}_complete

@@ -21,21 +21,26 @@ if [[ -z $weight ]]; then
 fi
 name=$(echo $weight | tr -d '[:space:]')
 
-touch image_${name}_started
-
 if [[ ! -z $ABSMEM ]]; then
   absmem="-absmem ${ABSMEM}"
 else
   absmem=""
 fi
 
+mv image_${name}_scheduled  image_${name}_started || touch image_${name}_started
+
+# Clean up any files from previous job
+rm wsclean-${name}*.fits || true
+rm stokes-${name}*.fits || true
+rm *.tmp || true
+
 if [[ ! -f chgcentred ]]; then
   chgcentre -minw -shiftback ${obsid}.ms
   touch chgcentred
 fi
 
-wsclean $absmem -j 20 -name wsclean-final-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -size 8000 8000 -scale 0.0034 -niter 1000000 -auto-threshold 1 -auto-mask 3 ${obsid}.ms
+wsclean $absmem -j 20 -name wsclean-final-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -size 8000 8000 -scale 0.0034 -niter 300000 -auto-threshold 1 -auto-mask 3 ${obsid}.ms
 
 pbcorrect wsclean-final-${name} image.fits beam stokes-final-${name}
 
-rm image_${name}_started && touch image_${name}_complete
+mv image_${name}_started image_${name}_complete

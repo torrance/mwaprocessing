@@ -13,7 +13,8 @@ set -e
 set -x
 
 obsid=$1
-i=$2
+label=$2
+prior=$3
 
 if [[ ! -z $ABSMEM ]]; then
   absmem="-absmem ${ABSMEM}"
@@ -21,12 +22,24 @@ else
   absmem=""
 fi
 
-if [ -z "$i" ]; then
-  echo "Iterations not set!"
+if [[ -z "$label" ]]; then
+  echo "Label not set!"
   exit 1
 fi
 
-touch selfcal_${i}_started
+mv ${label}_scheduled  ${label}_started || touch ${label}_started
+
+# Clean up from any previous run
+rm solutions-${label}.bin || true
+rm wsclean-${label}*.fits || true
+rm stokes-${label}*.fits || true
+rm *.tmp || true
+
+# Apply previous calibration solution, if one is present
+# This is necessary when recovering from a failed job
+if [[ ! -z $prior ]]; then
+  applysolutions ${obsid}.ms solutions-${prior}.bin
+fi
 
 # First chg phase centre to increase wsclean speed
 if [[ ! -f chgcentred ]]; then
@@ -36,22 +49,21 @@ fi
 
 # Do a shallow clean, to be used for selfcal
 # scale = 0.5 / chan
-wsclean -name wsclean-${i} -j 20 -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs 0 -size 8000 8000 -scale 0.0034 -niter 1000000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
+wsclean -name wsclean-${label} -j 20 -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs 0 -size 8000 8000 -scale 0.0034 -niter 300000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
 
 # Create a beam if it doesn't already exist
 if [[ ! -f beam-xxi.fits ]]; then
-  beam -2016 -proto wsclean-${i}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits
+  beam -2016 -proto wsclean-${label}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits
 fi
 
 # Output image of selfcal
-pbcorrect wsclean-${i} image.fits beam stokes-${i}
+pbcorrect wsclean-${label} image.fits beam stokes-${label}
 
 # Selfcal
+calibrate -minuv 60 -j 20 -i 500 $absmem ${obsid}.ms solutions-${label}.bin
 
-calibrate -minuv 60 -j 20 -i 500 $absmem ${obsid}.ms selfcal-solutions-${i}.bin
-
-applysolutions ${obsid}.ms selfcal-solutions-${i}.bin
+applysolutions ${obsid}.ms solutions-${label}.bin
 
 aoflagger ${obsid}.ms
 
-rm selfcal_${i}_started && touch selfcal_${i}_complete
+mv ${label}_started ${label}_complete

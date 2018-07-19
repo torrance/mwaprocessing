@@ -1,6 +1,6 @@
 #! /bin/bash
 #SBATCH -M galaxy
-#SBATCH --time=06:00:00
+#SBATCH --time=04:00:00
 #SBATCH --partition workq
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -25,8 +25,11 @@ else
 fi
 
 obsid=$1
-rm preprocess_scheduled || true
-touch preprocess_started
+mv preprocess_scheduled preprocess_started || touch preprocess_started
+
+# Clean up previous run
+rm -r ${obsid}.ms || true
+rm ${obsid}*.mwaf || true
 
 # Unpack flags and create command line option
 if [[ -f ${obsid}_flags.zip ]]; then
@@ -42,21 +45,8 @@ make_metafits.py --gps=${obsid}
 
 cotter $absmem $flags -m ${obsid}.metafits -freqres 40 -timeres 4 -m ${obsid}.metafits -allowmissing -o ${obsid}.ms *gpubox*.fits
 
+chgcentre ${obsid}.ms | grep -A 1 'Current phase direction' | tail -n 1 > phase_centre
+
 rm *gpubox*.fits
 
-# Run two rounds of calibration, flagging in between
-
-srclist_by_beam.py -x -m ${obsid}.metafits -s /home/torrance/srclist_pumav3_EoR0aegean_EoR1pietro+ForA.txt -n 1000
-cat srclist_pumav3_EoR0aegean_EoR1pietro+ForA_${obsid}_peel1000.txt | rts_to_skymodel.py > model.txt
-
-for i in {1..2}; do
-  calibrate $absmem -minuv 60 -maxuv 2600 -m model.txt -applybeam -j 20 -i 500 ${obsid}.ms solutions.bin
-
-  applysolutions ${obsid}.ms solutions.bin
-
-  aoflagger ${obsid}.ms
-done
-
-aocal_plot.py solutions.bin
-
-rm preprocess_started && touch preprocess_complete
+mv preprocess_started preprocess_complete

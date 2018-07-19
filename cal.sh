@@ -25,24 +25,44 @@ else
 fi
 
 obsid=$1
+label=$2
+prior=$3
 
-rm postprocess_scheduled || true
-rm recal_scheduled || true
-touch cal_started
+if [[ -z $label ]]; then
+  echo "No calibration label provided"
+  exit 1
+fi
 
+mv cal_${label}_scheduled cal_${label}_started || touch cal_${label}_started
+
+# Clean up from any previous runs
+rm solutions-${label}.bin || true
+
+# Apply previous calibration solution, if one is present
+# This is necessary when recovering from a failed job
+if [[ ! -z $prior ]]; then
+  applysolutions ${obsid}.ms solutions-${prior}.bin
+fi
+
+# Flag tiles if badantennae file is present
 if [[ -f badantennae ]]; then
   cat badantennae | xargs flagantennae ${obsid}.ms
 fi
 
+# Construct sky model
 srclist_by_beam.py -x -m ${obsid}.metafits -s /home/torrance/srclist_pumav3_EoR0aegean_EoR1pietro+ForA.txt -n 1000
 cat srclist_pumav3_EoR0aegean_EoR1pietro+ForA_${obsid}_peel1000.txt | rts_to_skymodel.py > model.txt
 
-calibrate $absmem -minuv 60 -maxuv 2600 -m model.txt -applybeam -j 20 -i 500 ${obsid}.ms solutions.bin
+if [[ -z $prior ]]; then
+  # Ignore previous calibration attempts if no prior is provided
+  data="-datacolumn DATA"
+fi
+calibrate $absmem $data -minuv 60 -maxuv 2600 -m model.txt -applybeam -j 20 -i 500 ${obsid}.ms solutions-${label}.bin
 
-applysolutions ${obsid}.ms solutions.bin
+applysolutions ${obsid}.ms solutions-${label}.bin
 
 aoflagger ${obsid}.ms
 
-aocal_plot.py solutions.bin
+aocal_plot.py solutions-${label}.bin
 
-rm cal_started && touch cal_complete
+mv cal_${label}_started cal_${label}_complete

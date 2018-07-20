@@ -37,6 +37,8 @@ mv cal_${label}_scheduled cal_${label}_started || touch cal_${label}_started
 
 # Clean up from any previous runs
 rm solutions-${label}.bin || true
+rm srclist_pumav3_EoR0aegean_EoR1pietro+ForA_${obsid}_peel1000.txt || true
+rm model.txt || true
 
 # Apply previous calibration solution, if one is present
 # This is necessary when recovering from a failed job

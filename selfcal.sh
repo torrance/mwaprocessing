@@ -31,8 +31,8 @@ mv ${label}_scheduled  ${label}_started || touch ${label}_started
 
 # Clean up from any previous run
 rm solutions-${label}.bin || true
-rm wsclean-${label}*.fits || true
-rm stokes-${label}*.fits || true
+rm ${obsid}-wsclean-${label}*.fits || true
+rm ${obsid}-${label}-stokes*.fits || true
 rm *.tmp || true
 
 # Apply previous calibration solution, if one is present
@@ -48,16 +48,16 @@ if [[ ! -f chgcentred ]]; then
 fi
 
 # Do a shallow clean, to be used for selfcal
-# scale = 0.5 / chan
-wsclean -name wsclean-${label} -j 20 -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs 0 -size 8000 8000 -scale 0.0034 -niter 300000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
+scale="scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc
+wsclean -name ${obsid}-wsclean-${label} -j 20 -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs -2 -size 8000 8000 -scale $scale -niter 300000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
 
 # Create a beam if it doesn't already exist
-if [[ ! -f beam-xxi.fits ]]; then
-  beam -2016 -proto wsclean-${label}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits
+if [[ ! -f ${obsid}-beam-xxi.fits ]]; then
+  beam -2016 -proto ${obsid}-wsclean-${label}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits -name ${obsid}-beam
 fi
 
 # Output image of selfcal
-pbcorrect wsclean-${label} image.fits beam stokes-${label}
+pbcorrect ${obsid}-wsclean-${label} image.fits ${obsid}-beam ${obsid}-${label}-stokes
 
 # Selfcal
 calibrate -minuv 60 -j 20 -i 500 $absmem ${obsid}.ms solutions-${label}.bin

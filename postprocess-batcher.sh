@@ -38,6 +38,14 @@ grep -v '^#' $1 | while read obsid; do
   fi
 
   jobid=$(cat $obsid/selfcal2_scheduled 2>/dev/null || cat $obsid/selfcal2_started 2>/dev/null || cat $obsid/selfcal2_complete 2>/dev/null || echo '')
+  if [[ -n $jobid && ! -f $obsid/image_uniform_scheduled && ! -f $obsid/image_uniform_started && ! -f $obsid/image_uniform_complete ]]; then
+    jobid=$(sbatch -J "image.sh $obsid uniform" --workdir $obsid -d afterok:$jobid image.sh $obsid uniform | cut -d ' ' -f 4)
+    if [[ -n $jobid ]]; then
+      echo $jobid > $obsid/image_uniform_scheduled
+    fi
+  fi
+
+  jobid=$(cat $obsid/image_uniform_scheduled 2>/dev/null || cat $obsid/image_uniform_started 2>/dev/null || cat $obsid/image_uniform_complete 2>/dev/null || echo '')
   if [[ -n $jobid && ! -f $obsid/image_briggs0_scheduled && ! -f $obsid/image_briggs0_started && ! -f $obsid/image_briggs0_complete ]]; then
     jobid=$(sbatch -J "image.sh $obsid briggs 0" --workdir $obsid -d afterok:$jobid image.sh $obsid 'briggs 0' | cut -d ' ' -f 4)
     if [[ -n $jobid ]]; then
@@ -46,6 +54,14 @@ grep -v '^#' $1 | while read obsid; do
   fi
 
   jobid=$(cat $obsid/image_briggs0_scheduled 2>/dev/null || cat $obsid/image_briggs0_started 2>/dev/null || cat $obsid/image_briggs0_complete 2>/dev/null || echo '')
+  if [[ -n $jobid && ! -f $obsid/image_briggs+1_scheduled && ! -f $obsid/image_briggs+1_started && ! -f $obsid/image_briggs+1_complete ]]; then
+    jobid=$(sbatch -J "image.sh $obsid briggs +1" --workdir $obsid -d afterok:$jobid image.sh $obsid 'briggs +1' | cut -d ' ' -f 4)
+    if [[ -n $jobid ]]; then
+      echo $jobid > $obsid/image_briggs+1_scheduled
+    fi
+  fi
+
+  jobid=$(cat $obsid/image_briggs+1_scheduled 2>/dev/null || cat $obsid/image_briggs+1_started 2>/dev/null || cat $obsid/image_briggs+1_complete 2>/dev/null || echo '')
   if [[ -n $jobid && ! -f $obsid/image_natural_scheduled && ! -f $obsid/image_natural_started && ! -f $obsid/image_natural_complete ]]; then
     jobid=$(sbatch -J "image.sh $obsid natural" --workdir $obsid -d afterok:$jobid image.sh $obsid 'natural' | cut -d ' ' -f 4)
     if [[ -n $jobid ]]; then

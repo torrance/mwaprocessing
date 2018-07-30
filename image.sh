@@ -39,8 +39,8 @@ if [[ ! -f chgcentred ]]; then
   touch chgcentred
 fi
 
-scale="scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc
-wsclean $absmem -j 20 -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -maxuv-l 15 -size 8000 8000 -scale $scale -niter 300000 -auto-threshold 1 -auto-mask 3 ${obsid}.ms
+scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)
+wsclean $absmem -j 20 -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size 8000 8000 -scale $scale -niter 300000 -auto-threshold 1 -auto-mask 3 ${obsid}.ms
 
 pbcorrect ${obsid}-wsclean-${name} image.fits ${obsid}-beam ${obsid}-${name}-stokes
 

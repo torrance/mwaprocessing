@@ -12,6 +12,31 @@
 set -e
 set -x
 
+# Parse parameters
+SHORT='s:'
+LONG='size:'
+OPTS=$(getopt --options $SHORT --long $LONG --name "$0" -- "$@")
+eval set -- "$OPTS"
+
+# Default values
+size=8000
+
+while true; do
+  case "$1" in
+    -s | --size )
+      size="$2"
+      shift 2
+      ;;
+    -- )
+      shift
+      break
+      ;;
+    * )
+      break;
+      ;;
+  esac
+done
+
 obsid=$1
 weight=$2
 
@@ -40,7 +65,7 @@ if [[ ! -f chgcentred ]]; then
 fi
 
 scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)
-wsclean $absmem -j 20 -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size 8000 8000 -scale $scale -niter 300000 -auto-threshold 1 -auto-mask 3 ${obsid}.ms
+wsclean $absmem -j 20 -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1 -auto-mask 3 ${obsid}.ms
 
 # Create a beam if it doesn't already exist
 if [[ ! -f ${obsid}-beam-xxi.fits ]]; then

@@ -52,12 +52,12 @@ scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)
 wsclean -name ${obsid}-wsclean-${label} -j 20 -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs -2 -size 8000 8000 -scale $scale -niter 300000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
 
 # Create a beam if it doesn't already exist
-if [[ ! -f ${obsid}-beam-xxi.fits ]]; then
-  beam -2016 -proto ${obsid}-wsclean-${label}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits -name ${obsid}-beam
+if [[ ! -f ${obsid}-beam8000px-xxi.fits ]]; then
+  beam -2016 -proto ${obsid}-wsclean-${label}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits -name ${obsid}-beam8000px
 fi
 
 # Output image of selfcal
-pbcorrect ${obsid}-wsclean-${label} image.fits ${obsid}-beam ${obsid}-${label}-stokes
+pbcorrect ${obsid}-wsclean-${label} image.fits ${obsid}-beam8000px ${obsid}-${label}-stokes
 
 # Selfcal
 calibrate -minuv 60 -j 20 -i 500 $absmem ${obsid}.ms solutions-${label}.bin

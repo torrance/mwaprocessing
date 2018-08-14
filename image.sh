@@ -77,13 +77,13 @@ if [[ ! -f chgcentred ]]; then
 fi
 
 scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)
-wsclean $absmem -j 20 -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1 -auto-mask 3 ${obsid}.ms
+wsclean $absmem -j 20 -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1 -auto-mask 3 $options ${obsid}.ms
 
 # Create a beam if it doesn't already exist
-if [[ ! -f ${obsid}-beam-xxi.fits ]]; then
-  beam -2016 -proto ${obsid}-wsclean-${name}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits -name ${obsid}-beam
+if [[ ! -f ${obsid}-beam${size}px-xxi.fits ]]; then
+  beam -2016 -proto ${obsid}-wsclean-${name}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits -name ${obsid}-beam${size}px
 fi
 
-pbcorrect ${obsid}-wsclean-${name} image.fits ${obsid}-beam ${obsid}-${name}-stokes
+pbcorrect ${obsid}-wsclean-${name} image.fits ${obsid}-beam${size}px ${obsid}-${name}-stokes
 
 mv image_${name}_started image_${name}_complete

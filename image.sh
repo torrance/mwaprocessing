@@ -13,18 +13,27 @@ set -e
 set -x
 
 # Parse parameters
-SHORT='s:'
-LONG='size:'
-OPTS=$(getopt --options $SHORT --long $LONG --name "$0" -- "$@")
+SHORT='s:o:n:'
+LONG='size:,options:,name:'
+OPTS=$(getopt --options $SHORT --longoptions $LONG --name "$0" -- "$@")
 eval set -- "$OPTS"
 
 # Default values
 size=8000
+options=""
 
 while true; do
   case "$1" in
     -s | --size )
       size="$2"
+      shift 2
+      ;;
+    -o | --options )
+      options="$2"
+      shift 2
+      ;;
+    -n | --name )
+      name="$2"
       shift 2
       ;;
     -- )
@@ -44,7 +53,10 @@ if [[ -z $weight ]]; then
   echo "No CLEAN weighting specified"
   exit 1
 fi
-name=$(echo $weight | tr -d '[:space:]')
+
+if [[ -z $name ]]; then
+  name=$(echo $weight | tr -d '[:space:]')
+fi
 
 if [[ ! -z $ABSMEM ]]; then
   absmem="-absmem ${ABSMEM}"

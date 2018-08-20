@@ -53,7 +53,13 @@ wsclean -name ${obsid}-wsclean-${label} -j 20 -multiscale -mgain 0.85 -pol xx,xy
 
 # Create a beam if it doesn't already exist
 if [[ ! -f ${obsid}-beam8000px-xxi.fits ]]; then
-  beam -2016 -proto ${obsid}-wsclean-${label}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits -name ${obsid}-beam8000px
+  make_beam.py -f ${obsid}-wsclean-${label}-XX-image.fits -m ${obsid}.metafits --model 2016 --jones
+
+  # Rename make_beam.py output for pbcorrect
+  for file in $(ls | grep XX-image_beam.*\.fits); do
+    pol=$(echo $file | sed 's/.*image_beam\(.*\)\.fits/\1/' | tr '[:upper:]' '[:lower:]')
+    mv $file ${obsid}-beam8000px-${pol}.fits
+  done
 fi
 
 # Output image of selfcal

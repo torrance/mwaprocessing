@@ -81,7 +81,13 @@ wsclean $absmem -j 20 -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -po
 
 # Create a beam if it doesn't already exist
 if [[ ! -f ${obsid}-beam${size}px-xxi.fits ]]; then
-  beam -2016 -proto ${obsid}-wsclean-${name}-XX-image.fits -ms ${obsid}.ms -m ${obsid}.metafits -name ${obsid}-beam${size}px
+  make_beam.py -f ${obsid}-wsclean-${name}-XX-image.fits -m ${obsid}.metafits --model 2016 --jones
+
+  # Rename make_beam.py output for pbcorrect
+  for file in $(ls | grep XX-image_beam.*\.fits); do
+    pol=$(echo $file | sed 's/.*image_beam\(.*\)\.fits/\1/' | tr '[:upper:]' '[:lower:]')
+    mv $file ${obsid}-beam${size}px-${pol}.fits
+  done
 fi
 
 pbcorrect ${obsid}-wsclean-${name} image.fits ${obsid}-beam${size}px ${obsid}-${name}-stokes

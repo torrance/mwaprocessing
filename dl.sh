@@ -1,5 +1,11 @@
 #! /bin/bash
 
+if command -v module < /dev/null; then
+  set +x
+  module load manta-ray-client
+  set -x
+fi
+
 set -e
 set -x
 

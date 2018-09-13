@@ -35,6 +35,8 @@ def main():
     parser.add_argument('--aegean', help="Aegean CSV")
     parser.add_argument('--datacolumn', default='CORRECTED_DATA')
     parser.add_argument('--width', type=int, required=True)
+    parser.add_argument('--passes', type=int, default=2)
+    parser.add_argument('--minuv', type=float, default=0, help="Fit models only on baselines above this minimum uv distance (metres)")
     args = parser.parse_args()
 
     metafits = getheader(args.meta)
@@ -73,6 +75,7 @@ def main():
     # Check whether width evenly divides the total channels
     if chans % args.width != 0:
         print("Width (%d) does not evenly divide channel number (%d)" % (args.width, chans))
+        exit(1)
 
     widefreqs = np.array([
         np.mean(freqs[i:i+args.width]) for i in range(0, len(freqs), args.width)
@@ -90,18 +93,21 @@ def main():
 
 
     # Create PEELED_DATA column if it does not exist
-    # if ('PEELED_DATA' not in ms.colnames()):
-    #     coldesc = ms.getcoldesc('DATA')
-    #     coldesc['name'] = 'PEELED_DATA'
-    #     ms.addcols(coldesc)
+    if ('PEELED_DATA' not in ms.colnames()):
+        print("Creating PEELED_DATA column...", end=" ")
+        sys.stdout.flush()
+        coldesc = ms.getcoldesc('DATA')
+        coldesc['name'] = 'PEELED_DATA'
+        ms.addcols(coldesc)
 
-    #     peeled = ms.col('PEELED_DATA')
-    #     peeled[:] = np.zeros((chans, pols), dtype=np.complex)
+        peeled = ms.getcol(args.datacolumn)
+        ms.putcol('PEELED_DATA', peeled)
+        print("Done")
 
     # Load models
     with open(args.model) as f:
         models = model_parser(f)
-    models = models[0:6]
+    models = models[0:20]
     print("Initialised %d model sources" % len(models))
 
     # Initialise points based on beam values at the widefreqs
@@ -116,7 +122,7 @@ def main():
         JBeam = pb.MWA_Tile_full_EE(np.pi/2 - altaz[0], altaz[1], widefreq, delays=delays, jones=True)
         JBeams.append(JBeam)
 
-    params = []
+    sources = []
     for i, comp in enumerate(comps):
         xx_fluxes = []
         yy_fluxes = []
@@ -146,156 +152,144 @@ def main():
         xx1, xx2, xx3 = np.polyfit(log_widefreqs, log_xx_fluxes, 2)
         yy1, yy2, yy3 = np.polyfit(log_widefreqs, log_yy_fluxes, 2)
 
-        params.append([
-            [xx1, xx2, xx3, comp.ra, comp.dec],
-            [yy1, yy2, yy3, comp.ra, comp.dec],
+        sources.append([
+            Point(xx1, xx2, xx3, comp.ra, comp.dec),
+            Point(yy1, yy2, yy3, comp.ra, comp.dec),
         ])
-    params = np.array(params)
+    sources = np.array(sources)
+
+    # Read data minus flagged rows
+    tbl = taql("select * from $ms where not FLAG_ROW")
+    uvw = tbl.getcol('UVW')
+    data = tbl.getcol(args.datacolumn)
+
+    # Handle flags by setting entries that are flagged as NaN
+    flags = tbl.getcol('FLAG')
+    data[flags] = np.nan
 
     # Subtract all sources from visibilities
+    print("Subtracting current best source models from visibilities...   0%", end="")
+    sys.stdout.flush()
 
-    for i, (xx_params, yy_params) in enumerate(params):
-        print("Peeling source %d / %d" % (i+1, len(comps)))
+    for i, (source_xx, source_yy) in enumerate(sources):
+        data[:, :, 0] -= source_xx.visibility(uvw, freqs, ra0, dec0)
+        source_xx.flush()
+        data[:, :, 3] -= source_yy.visibility(uvw, freqs, ra0, dec0)
+        source_xx.flush()
+
+        print("\b\b\b\b% 3d%%" % (i / len(sources) * 100), end="")
+        sys.stdout.flush()
+
+    tbl.putcol('PEELED_DATA', data)
+    del uvw
+    del data
+
+    print("\b\b\b\bDone")
+
+    for i, (source_xx, source_yy) in enumerate(sources):
+        print("Peeling source %d / %d" % (i+1, len(sources)))
+
+        # Add source back into data
+        print("  > Adding subtracted source back into data...", end=" ")
+        sys.stdout.flush()
+        uvw = tbl.getcol('UVW')
+        data = tbl.getcol('PEELED_DATA')
+        data[:, :, 0] += source_xx.visibility(uvw, freqs, ra0, dec0)
+        data[:, :, 3] += source_yy.visibility(uvw, freqs, ra0, dec0)
+        tbl.putcol('PEELED_DATA', data)
+        del uvw
+        del data
+        print("Done")
 
         # Phase rotate visibilities onto source to peel
         print("  > Phase rotating data onto source...", end=" ")
         sys.stdout.flush()
-        ra0, dec0 = xx_params[3], xx_params[4]
+        _ra0, _dec0 = source_xx.ra, source_xx.dec
         dm = measures()
         phasecentre = dm.direction(
             'j2000',
-            quantity(ra0, 'rad'),
-            quantity(dec0, 'rad'),
+            quantity(_ra0, 'rad'),
+            quantity(_dec0, 'rad'),
         )
 
-        uvw, data = phase_rotate(ms, obspos, phasecentre, antennas, lambdas)
+        uvw, rotated = phase_rotate(tbl, obspos, phasecentre, antennas, lambdas)
         print("Done")
 
-        # Handle flags
-        # Remove rows that have been flagged, and set entries that
-        # are flagged as NaN
-        flags = ms.getcol('FLAG')
-        data[flags] = np.nan
-        flagged_rows = ms.getcol('FLAG_ROW')
-        uvw = uvw[~flagged_rows]
-        data = data[~flagged_rows]
-
-        # Subtract current model from visibilities
-        print("  > Subtracting current best model from visibilities...", end=" ")
-        sys.stdout.flush()
-
-        uvw_lambda = uvw[:, :, np.newaxis] / lambdas
-        uvw_lambda = np.transpose(uvw_lambda, (1, 0, 2))
-
-        # Preallocate arrays to be used in subtraction calculations
-        arr1 = np.zeros_like(data[:, :, 0])
-        arr2 = np.zeros_like(data[:, :, 0])
-        arr3 = np.zeros_like(data[:, :, 0])
-
-        for j, (_xx_params, _yy_params) in enumerate(params):
-            if i != j:
-                A0, A1, A2, ra, dec = _xx_params
-                l, m = radec_to_lm(ra, dec, ra0, dec0)
-                data[:, :, 0] -= point(A0, A1, A2, l, m, uvw_lambda, freqs, arr1, arr2, arr3)
-                A0, A1, A2, ra, dec = _yy_params
-                l, m = radec_to_lm(ra, dec, ra0, dec0)
-                data[:, :, 3] -= point(A0, A1, A2, l, m, uvw_lambda, freqs, arr1, arr2, arr3)
-
-            print(".", end="")
-            sys.stdout.flush()
-        print("Done")
+        # Filter out baselines beneath minuv length
+        uvw_length = (uvw.T[0]**2 + uvw.T[1]**2) > args.minuv
+        uvw = uvw[uvw_length, :]
+        rotated = rotated[uvw_length, :]
 
         # Average bands into chunks of width
-        print("  > Averaging in frequncy space in %d width chunks..." % args.width, end=" ")
+        print("  > Averaging in frequncy space in chunks of %d channels..." % (chans // args.width), end=" ")
         sys.stdout.flush()
 
-        averaged = np.zeros((data.shape[0], chans // args.width, pols), dtype=np.complex)
+        averaged = np.zeros((rotated.shape[0], chans // args.width, pols), dtype=np.complex)
         for j in range(chans // args.width):
-            np.nanmean(data[:, j:j+args.width, :], 1, out=averaged[:, j, :])
+            np.nanmean(rotated[:, j:j+args.width, :], 1, out=averaged[:, j, :])
 
         print("Done")
 
         # Fit model to data
         print("  > Fitting model to data...", end=" ")
-
-        # Preallocate working arrays
-        arr1 = np.zeros_like(averaged[:, :, 0])
-        arr2 = np.zeros_like(averaged[:, :, 0])
-        arr3 = np.zeros_like(averaged[:, :, 0])
-
-        uvw_lambda = uvw[:, :, np.newaxis] / widelambdas
-        uvw_lambda = np.transpose(uvw_lambda, (1, 0, 2))
+        sys.stdout.flush()
 
         # Fit to xx
-        A0, A1, A2, ra, dec = xx_params
-        l, m = radec_to_lm(ra, dec, ra0, dec0)
         ret = least_squares(
             residual,
-            [A0, A1, A2, l, m],
+            source_xx.params,
             method='lm',
             args=(
-                uvw_lambda,
+                uvw,
                 widefreqs,
+                source_xx,
                 averaged[:, :, 0],
-                arr1,
-                arr2,
-                arr3,
+                _ra0,
+                _dec0
             )
         )
         print(np.exp(
             ret.x[0] * np.log(180E6)**2 + ret.x[1] * np.log(180E6) + ret.x[2]
         ))
-        A0, A1, A2, l, m = ret.x
-        ra, dec = lm_to_radec(l, m, ra0, dec0)
-        params[i][0][:] = [A0, A1, A2, ra, dec]
-
+        source_xx.params = ret.x
 
         # Fit to yy
-        A0, A1, A2, ra, dec = yy_params
-        l, m = radec_to_lm(ra, dec, ra0, dec0)
         ret = least_squares(
             residual,
-            [A0, A1, A2, l, m],
+            source_yy.params,
             method='lm',
             args=(
-                uvw_lambda,
+                uvw,
                 widefreqs,
+                source_yy,
                 averaged[:, :, 3],
-                arr1,
-                arr2,
-                arr3,
+                _ra0,
+                _dec0
             )
         )
         print(np.exp(
             ret.x[0] * np.log(180E6)**2 + ret.x[1] * np.log(180E6) + ret.x[2]
         ))
-        A0, A1, A2, l, m = ret.x
-        ra, dec = lm_to_radec(l, m, ra0, dec0)
-        params[i][1][:] = [A0, A1, A2, ra, dec]
+        source_yy.params = ret.x
 
         print("Done")
 
-    print("Constructing final peeled source...")
-    ra0, dec0 = table(args.ms + '/FIELD').getcell('PHASE_DIR', 0)[0]  # Phase centre in radians
-    uvw = ms.getcol('UVW')
-    data = ms.getcol(args.datacolumn)
-    uvw_lambda = uvw[:, :, np.newaxis] / lambdas
-    uvw_lambda = np.transpose(uvw_lambda, (1, 0, 2))
-    # Preallocate arrays to be used in subtraction calculations
-    arr1 = np.zeros_like(data[:, :, 0])
-    arr2 = np.zeros_like(data[:, :, 0])
-    arr3 = np.zeros_like(data[:, :, 0])
+        # Subtract updated source model from data
+        print("  > Subtracting updated source model from data...", end=" ")
+        sys.stdout.flush()
+        uvw = tbl.getcol('UVW')
+        data = tbl.getcol('PEELED_DATA')
+        data[:, :, 0] -= source_xx.visibility(uvw, freqs, ra0, dec0)
+        source_xx.flush()
+        data[:, :, 3] -= source_yy.visibility(uvw, freqs, ra0, dec0)
+        source_yy.flush()
+        tbl.putcol('PEELED_DATA', data)
+        del data
+        print("Done")
 
-    for xx_params, yy_params in params:
-        A0, A1, A2, ra, dec = xx_params
-        l, m = radec_to_lm(ra, dec, ra0, dec0)
-        data[:, :, 0] -= point(A0, A1, A2, l, m, uvw_lambda, freqs, arr1, arr2, arr3)
-        A0, A1, A2, ra, dec = yy_params
-        l, m = radec_to_lm(ra, dec, ra0, dec0)
-        data[:, :, 3] -= point(A0, A1, A2, l, m, uvw_lambda, freqs, arr1, arr2, arr3)
-
-    ms.putcol('PEELED_DATA', data)
+    print("\n Finishing peeling. Writing data back to disk...", end=" ")
     ms.close()
+    print("Done")
 
 
 def phase_rotate(ms, obspos, phasecentre, antennas, lambdas):
@@ -307,7 +301,7 @@ def phase_rotate(ms, obspos, phasecentre, antennas, lambdas):
     uvw = ms.getcol('UVW')
     ant1 = ms.getcol('ANTENNA1')
     ant2 = ms.getcol('ANTENNA2')
-    data = ms.getcol('DATA')
+    data = ms.getcol('PEELED_DATA')
     chans, _ = data[0].shape
 
     # Recalculate uvw for new phase position
@@ -327,42 +321,103 @@ def phase_rotate(ms, obspos, phasecentre, antennas, lambdas):
         new_uvw[idx] = antenna_uvw[ant1[idx]] - antenna_uvw[ant2[idx]]
 
     # Calculate phase offset
+    # TODO: with clever broadcasting, can do this in one operation
     woffset = -2j * np.pi * (new_uvw.T[2] - uvw.T[2])
     for chan in range(chans):
-        data[:, chan, 0] = data[:, chan, 0] * np.exp(woffset / lambdas[chan])
-        data[:, chan, 1] = data[:, chan, 1] * np.exp(woffset / lambdas[chan])
-        data[:, chan, 2] = data[:, chan, 2] * np.exp(woffset / lambdas[chan])
-        data[:, chan, 3] = data[:, chan, 3] * np.exp(woffset / lambdas[chan])
+        data[:, chan, 0] *= np.exp(woffset / lambdas[chan])
+        data[:, chan, 1] *= np.exp(woffset / lambdas[chan])
+        data[:, chan, 2] *= np.exp(woffset / lambdas[chan])
+        data[:, chan, 3] *= np.exp(woffset / lambdas[chan])
 
     return new_uvw, data
 
 
-def residual(params, uvw_lambda, freqs, V, arr1, arr2, arr3):
-    A0, A1, A2, l, m = params
-    model = point(A0, A1, A2, l, m, uvw_lambda, freqs, arr1, arr2, arr3)
+def residual(x0, uvw, freqs, source, V, ra0, dec0):
+    source.params = x0
+    model = source.visibility(uvw, freqs, ra0, dec0)
     residuals = abs((V - model).flatten())
     return residuals[np.isfinite(residuals)]
 
 
-def point(A0, A1, A2, l, m, uvw_lambda, freqs, arr1, arr2, arr3):
-    logfreqs = np.log(freqs)
-    A = np.exp(
-        A0 * logfreqs**2 + A1 * logfreqs + A2
-    )
+class Point(object):
+    def __init__(self, A0, A1, A2, ra, dec):
+        self.A0 = A0
+        self.A1 = A1
+        self.A2 = A2
+        self.ra = ra
+        self.dec = dec
 
-    np.multiply(uvw_lambda[0], l, out=arr1)
-    np.multiply(uvw_lambda[1], m, out=arr2)
-    np.multiply(uvw_lambda[2], np.sqrt(1 - l**2 - m**2) - 1, out=arr3)
-    np.add(arr1, arr2, out=arr1)
-    np.add(arr1, arr3, out=arr1)
-    np.multiply(arr1, 2j * np.pi, out=arr1)
-    np.exp(arr1, out=arr1)
-    np.multiply(arr1, A / np.sqrt(1 - l**2 - m**2), out=arr1)
-    return arr1
+        self.uvw_lambda = None
+        self.arr1 = None
+        self.arr2 = None
+        self.arr3 = None
 
-    return np.exp(2j * np.pi *
-        (uvw_lambda[0] * l + uvw_lambda[1] * m + uvw_lambda[2] * (np.sqrt(1 - l**2 - m**2) - 1))
-        ) * (A.T / np.sqrt(1 - l**2 - m**2))
+    @property
+    def params(self):
+        return np.array([
+            self.A0,
+            self.A1,
+            self.A2,
+            self.ra,
+            self.dec
+        ])
+
+    @params.setter
+    def params(self, p):
+        self.A0 = p[0]
+        self.A1 = p[1]
+        self.A2 = p[2]
+        self.ra = p[3]
+        self.dec = p[4]
+
+    def get_lm(self, ra0, dec0):
+        return radec_to_lm(self.ra, self.dec, ra0, dec0)
+
+    def set_lm(self, l, m, ra0, dec0):
+        self.ra, self.dec = lm_to_radec(l, m, ra0, dec0)
+
+    def flush(self):
+        del self.uvw_lambda
+        del self.arr1
+        del self.arr2
+        del self.arr3
+        self.uvw_lambda = None
+        self.arr1 = None
+        self.arr2 = None
+        self.arr3 = None
+
+    def visibility(self, uvw, freqs, ra0, dec0):
+        # uvw_lambdas has dimensions [ms row, freq, uvw]
+        lambdas = speed_of_light / freqs
+        self.uvw_lambda = uvw[:, :, np.newaxis] / lambdas
+        self.uvw_lambda = np.transpose(self.uvw_lambda, (1, 0, 2))
+
+        # Preallocate (or reuse) working arrays
+        if self.arr1 is None or self.arr1.shape != (len(uvw), len(freqs)):
+            self.arr1 = np.empty((len(uvw), len(freqs)), np.complex)
+            self.arr2 = np.empty((len(uvw), len(freqs)), np.complex)
+            self.arr3 = np.empty((len(uvw), len(freqs)), np.complex)
+
+        logfreqs = np.log(freqs)
+        A = np.exp(
+            self.A0 * logfreqs**2 + self.A1 * logfreqs + self.A2
+        )
+
+        l, m = self.get_lm(ra0, dec0)
+
+        return np.exp(2j * np.pi *
+            (self.uvw_lambda[0] * l + self.uvw_lambda[1] * m + self.uvw_lambda[2] * (np.sqrt(1 - l**2 - m**2) - 1))
+        ) * (A / np.sqrt(1 - l**2 - m**2))
+
+        np.multiply(self.uvw_lambda[0], l, out=self.arr1)
+        np.multiply(self.uvw_lambda[1], m, out=self.arr2)
+        np.multiply(self.uvw_lambda[2], np.sqrt(1 - l**2 - m**2) - 1, out=self.arr3)
+        np.add(self.arr1, self.arr2, out=self.arr1)
+        np.add(self.arr1, self.arr3, out=self.arr1)
+        np.multiply(self.arr1, 2j * np.pi, out=self.arr1)
+        np.exp(self.arr1, out=self.arr1)
+        np.multiply(self.arr1, A / np.sqrt(1 - l**2 - m**2), out=self.arr1)
+        return self.arr1
 
 
 def radec_to_lm(ra, dec, ra0, dec0):
@@ -506,13 +561,13 @@ def measurement_parser(f):
     exit(1)
 
 
-class Model:
+class Model(object):
     def __init__(self, name, components):
         self.name = name
         self.components = components
 
 
-class Component:
+class Component(object):
     def __init__(self, position, measurements):
         self.position = position
         self.measurements = measurements

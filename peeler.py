@@ -48,7 +48,7 @@ def main():
 
     # Retrieve telescope position
     dm = measures()
-    obs = table(args.ms + '/OBSERVATION')
+    obs = table(args.ms + '/OBSERVATION', ack=False)
     if 'TELESCOPE_NAME' in obs.colnames():
         names = obs.getcol('TELESCOPE_NAME')
         if len(names) == 1:
@@ -63,10 +63,10 @@ def main():
         exit(1)
     print("Observation taken using telescope %s" % names[0])
 
-    ms = table(args.ms, readonly=False)
-    freqs = table(args.ms + '/SPECTRAL_WINDOW').getcell('CHAN_FREQ', 0)
+    ms = table(args.ms, readonly=False, ack=False)
+    freqs = table(args.ms + '/SPECTRAL_WINDOW', ack=False).getcell('CHAN_FREQ', 0)
     lambdas = speed_of_light / freqs
-    ra0, dec0 = table(args.ms + '/FIELD').getcell('PHASE_DIR', 0)[0]  # Phase centre in radians
+    ra0, dec0 = table(args.ms + '/FIELD', ack=False).getcell('PHASE_DIR', 0)[0]  # Phase centre in radians
     chans, pols = ms.getcell(args.datacolumn, 0).shape
     print("There are %d channels" % chans)
 
@@ -77,11 +77,10 @@ def main():
     widefreqs = np.array([
         np.mean(freqs[i:i+args.width]) for i in range(0, len(freqs), args.width)
     ])
-    print(widefreqs)
     widelambdas = speed_of_light / widefreqs
 
 
-    antennas = table(args.ms + '/ANTENNA').getcol('POSITION')
+    antennas = table(args.ms + '/ANTENNA', ack=False).getcol('POSITION')
     antennas = dm.position(
         'itrf',
         quantity(antennas.T[0], 'm'),

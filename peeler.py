@@ -250,6 +250,7 @@ def main():
                 )
             data.flags.writeable = True
 
+            data = data.copy()  # Avoid changing data for running threads
             for j, diff in enumerate(diffs):
                 data += diff
                 print("\b\b\b\b% 3d%%" % ((i + j + 1) / len(partitions) * 100), end="")
@@ -271,15 +272,16 @@ def peel_star(args):
     return peel(*args)
 
 
-def peel(uvw, times, data, ant1, ant2, partition, antennas, freqs, obspos, ra0, dec0, args, add_back=False):
-    original = data.copy()
-    data = data.copy()
+def peel(uvw, times, original, ant1, ant2, partition, antennas, freqs, obspos, ra0, dec0, args, add_back=False):
+    data = original.copy()
 
     # Add the current model of the source back into the data for subsequent passes
     if add_back:
         for source_xx, source_yy in partition:
             data[:, :, 0] += source_xx.visibility(uvw, freqs, ra0, dec0)
+            source_xx.flush()
             data[:, :, 3] += source_yy.visibility(uvw, freqs, ra0, dec0)
+            source_yy.flush()
 
     # Phase rotate visibilities onto source to peel
     # TODO: rotate onto centroid of partition

@@ -3,8 +3,9 @@
 from __future__ import print_function, division
 
 import argparse
+from itertools import imap
 import sys
-from multiprocessing import Pool
+from multiprocessing.dummy import Pool
 
 from astropy.io.fits import getheader
 from astropy.coordinates import AltAz, SkyCoord
@@ -22,6 +23,7 @@ import numpy.ma as ma
 import mwa_pb.config
 import mwa_pb.primary_beam as pb
 from scipy.optimize import least_squares
+import warnings
 
 
 speed_of_light = 299792458
@@ -37,6 +39,8 @@ def main():
     parser.add_argument('--width', type=int, required=True)
     parser.add_argument('--passes', type=int, default=2)
     parser.add_argument('--minuv', type=float, default=0, help="Fit models only on baselines above this minimum uv distance (metres)")
+    parser.add_argument('--workers', type=int, default=0)
+    parser.add_argument('--threshold', type=float, default=0.5)
     args = parser.parse_args()
 
     metafits = getheader(args.meta)
@@ -158,143 +162,210 @@ def main():
             #Gaussian(xx1, xx2, xx3, 0, 0, 0, comp.ra, comp.dec),
             #Gaussian(yy1, yy2, yy3, 0, 0, 0, comp.ra, comp.dec),
         ])
-    sources = np.array(sources)
 
     # Group sources by a spatial threshold
     threshold = (3 / 60) * np.pi / 180
     partitions = spatial_partition(sources, threshold)
 
     # Order sources by apparent flux at midfreq
-    partitions = np.array(
-        sorted(partitions, reverse=True, key=lambda xs: sum([x[0].flux(midfreq) + x[1].flux(midfreq) for x in xs]))
+    partitions = sorted(
+        partitions, reverse=True, key=lambda xs: sum([x[0].flux(midfreq) + x[1].flux(midfreq) for x in xs])
     )
+    partitions = partitions[0:10]
 
     # Read data minus flagged rows
     tbl = taql("select * from $ms where not FLAG_ROW")
     uvw = tbl.getcol('UVW')
+    uvw.flags.writeable = False
+    times = tbl.getcol('TIME_CENTROID')
+    times.flags.writeable = False
+    ant1 = tbl.getcol('ANTENNA1')
+    ant1.flags.writeable = False
+    ant2 = tbl.getcol('ANTENNA2')
+    ant2.flags.writeable = False
     data = tbl.getcol(args.datacolumn)
 
     # Handle flags by setting entries that are flagged as NaN
     flags = tbl.getcol('FLAG')
     data[flags] = np.nan
 
-    tbl.putcol('PEELED_DATA', data)
-    del uvw
-    del data
+    if args.workers > 0:
+        pool = Pool(args.workers)
 
     for passno in range(args.passes):
-        for i, partition in enumerate(partitions):
-            print("Peeling partition %d / %d (sources %d; pass %d/%d)" % (i+1, len(partitions), len(partition), passno+1, args.passes))
+        i = 0
 
-            # Add source back into data
-            if passno > 0:
-                print("  > Adding subtracted sources back into data...", end=" ")
-                sys.stdout.flush()
-                uvw = tbl.getcol('UVW')
-                data = tbl.getcol('PEELED_DATA')
-                for source_xx, source_yy in partition:
-                    data[:, :, 0] += source_xx.visibility(uvw, freqs, ra0, dec0)
-                    data[:, :, 3] += source_yy.visibility(uvw, freqs, ra0, dec0)
-                tbl.putcol('PEELED_DATA', data)
-                del uvw
-                del data
-                print("Done")
+        print("Beginning pass %d...   0%%" % (passno + 1), end="")
+        sys.stdout.flush()
+        while i < len(partitions):
+            # Find the next batch of partitions that are within some threshold
+            # of the currently brightest partition due to process.
+            fluxlimit = args.threshold * sum([
+                x[0].flux(midfreq) + x[1].flux(midfreq) for x in partitions[i]
+            ])
+            for n, partition in enumerate(partitions[i:] + [None]):
+                if partition is None:
+                    break
+                elif sum([x[0].flux(midfreq) + x[1].flux(midfreq) for x in partition]) < fluxlimit:
+                    break
 
-            # Phase rotate visibilities onto source to peel
-            print("  > Phase rotating data onto source...", end=" ")
-            sys.stdout.flush()
-            # TODO: rotate onto centroid of partition
-            _ra0, _dec0 = partition[0][0].ra, partition[0][0].dec
-            dm = measures()
-            phasecentre = dm.direction(
-                'j2000',
-                quantity(_ra0, 'rad'),
-                quantity(_dec0, 'rad'),
-            )
+            batch = partitions[i:i+n]
 
-            uvw, rotated = phase_rotate(tbl, obspos, phasecentre, antennas, lambdas)
-            print("Done")
-
-            # Filter out baselines beneath minuv length
-            uvw_length = (uvw.T[0]**2 + uvw.T[1]**2) > args.minuv
-            uvw = uvw[uvw_length, :]
-            rotated = rotated[uvw_length, :]
-
-            # Average bands into chunks of width
-            print("  > Averaging in frequncy space in chunks of %d channels..." % (chans // args.width), end=" ")
-            sys.stdout.flush()
-
-            averaged = np.zeros((rotated.shape[0], chans // args.width, pols), dtype=np.complex)
-            for j in range(chans // args.width):
-                np.nanmean(rotated[:, j:j+args.width, :], 1, out=averaged[:, j, :])
-
-            print("Done")
-
-            # Fit model to data
-            print("  > Fitting model to data...", end=" ")
-            sys.stdout.flush()
-
-            # Fit to xx (0) and yy (3)
-            for k, pol in enumerate([0, 3]):
-                x0 = [p for source in partition for p in source[k].params]
-                ret = least_squares(
-                    residual,
-                    x0,
-                    method='lm',
-                    args=(
-                        uvw,
-                        widefreqs,
-                        [source[k] for source in partition],
-                        averaged[:, :, pol],
-                        _ra0,
-                        _dec0
+            data.flags.writeable = False
+            if args.workers:
+                diffs = pool.imap_unordered(
+                    peel_star,
+                    zip(
+                        [uvw] * len(batch),
+                        [times] * len(batch),
+                        [data] * len(batch),
+                        [ant1] * len(batch),
+                        [ant2] * len(batch),
+                        batch,
+                        [antennas] * len(batch),
+                        [freqs] * len(batch),
+                        [obspos] * len(batch),
+                        [ra0] * len(batch),
+                        [dec0] * len(batch),
+                        [args] * len(batch),
+                        [passno] * len(batch),
                     )
                 )
-                print(np.exp(
-                    ret.x[0] * np.log(180E6)**2 + ret.x[1] * np.log(180E6) + ret.x[2]
-                ))
+            else:
+                diffs = imap(
+                    peel,
+                    [uvw] * len(batch),
+                    [times] * len(batch),
+                    [data] * len(batch),
+                    [ant1] * len(batch),
+                    [ant2] * len(batch),
+                    batch,
+                    [antennas] * len(batch),
+                    [freqs] * len(batch),
+                    [obspos] * len(batch),
+                    [ra0] * len(batch),
+                    [dec0] * len(batch),
+                    [args] * len(batch),
+                    [passno] * len(batch),
+                )
+            data.flags.writeable = True
 
-                # Save final values, accounting for potentially
-                # different number of params per source
-                i = 0
-                for source in partition:
-                    n = len(source[k].params)
-                    source[k].params = ret.x[i:i+n]
-                    i += n
+            for j, diff in enumerate(diffs):
+                data += diff
+                print("\b\b\b\b% 3d%%" % ((i + j + 1) / len(partitions) * 100), end="")
+                sys.stdout.flush()
 
-            print("Done")
+            i += n
 
-            # Subtract updated source model from data
-            print("  > Subtracting updated source model from data...", end=" ")
-            sys.stdout.flush()
-            uvw = tbl.getcol('UVW')
-            data = tbl.getcol('PEELED_DATA')
-            for source_xx, source_yy in partition:
-                data[:, :, 0] -= source_xx.visibility(uvw, freqs, ra0, dec0)
-                source_xx.flush()
-                data[:, :, 3] -= source_yy.visibility(uvw, freqs, ra0, dec0)
-                source_yy.flush()
-            tbl.putcol('PEELED_DATA', data)
-            del data
-            print("Done")
+        print("")
 
     print("\n Finishing peeling. Writing data back to disk...", end=" ")
+    tbl.putcol('PEELED_DATA', data)
     ms.close()
     with open('peeled.reg', 'w') as f:
         to_ds9_regions(f, partitions)
     print("Done")
 
 
-def phase_rotate(ms, obspos, phasecentre, antennas, lambdas):
+def peel_star(args):
+    return peel(*args)
+
+
+def peel(uvw, times, data, ant1, ant2, partition, antennas, freqs, obspos, ra0, dec0, args, add_back=False):
+    original = data.copy()
+    data = data.copy()
+
+    # Add the current model of the source back into the data for subsequent passes
+    if add_back:
+        for source_xx, source_yy in partition:
+            data[:, :, 0] += source_xx.visibility(uvw, freqs, ra0, dec0)
+            data[:, :, 3] += source_yy.visibility(uvw, freqs, ra0, dec0)
+
+    # Phase rotate visibilities onto source to peel
+    # TODO: rotate onto centroid of partition
+    _ra0, _dec0 = partition[0][0].ra, partition[0][0].dec
+    dm = measures()
+    phasecentre = dm.direction(
+        'j2000',
+        quantity(_ra0, 'rad'),
+        quantity(_dec0, 'rad'),
+    )
+
+    uvw_rotated, rotated = phase_rotate(
+        uvw,
+        times,
+        data,
+        ant1,
+        ant2,
+        obspos,
+        phasecentre,
+        antennas,
+        speed_of_light / freqs,
+    )
+
+    # Filter out baselines beneath minuv length
+    uvw_length = (uvw_rotated.T[0]**2 + uvw_rotated.T[1]**2) > args.minuv
+    uvw_rotated = uvw_rotated[uvw_length, :]
+    rotated = rotated[uvw_length, :]
+
+    # Average bands into chunks of width
+    chans = len(freqs)
+    averaged = np.zeros((rotated.shape[0], chans // args.width, 4), dtype=np.complex)
+    for j in range(chans // args.width):
+        with warnings.catch_warnings():
+            # Ignore "Mean of empty slice" warnings (due to NaN values)
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            np.nanmean(rotated[:, j:j+args.width, :], 1, out=averaged[:, j, :])
+
+    widefreqs = np.array([
+        np.mean(freqs[i:i+args.width]) for i in range(0, chans, args.width)
+    ])
+
+    # Fit model to data
+    # Fit to xx (0) and yy (3)
+    for k, pol in enumerate([0, 3]):
+        x0 = [p for source in partition for p in source[k].params]
+        ret = least_squares(
+            residual,
+            x0,
+            #method='lm', # Doesn't work in multithreaded environment
+            args=(
+                uvw_rotated,
+                widefreqs,
+                [source[k] for source in partition],
+                averaged[:, :, pol],
+                _ra0,
+                _dec0
+            )
+        )
+        # print(np.exp(
+        #     ret.x[0] * np.log(180E6)**2 + ret.x[1] * np.log(180E6) + ret.x[2]
+        # ))
+
+        # Save final values, accounting for potentially
+        # different number of params per source
+        i = 0
+        for source in partition:
+            n = len(source[k].params)
+            source[k].params = ret.x[i:i+n]
+            i += n
+
+    # Subtract updated source model from data
+    for source_xx, source_yy in partition:
+        data[:, :, 0] -= source_xx.visibility(uvw, freqs, ra0, dec0)
+        source_xx.flush()
+        data[:, :, 3] -= source_yy.visibility(uvw, freqs, ra0, dec0)
+        source_yy.flush()
+
+    return np.subtract(data, original, out=data)
+
+
+def phase_rotate(uvw, times, data, ant1, ant2, obspos, phasecentre, antennas, lambdas):
+    data = data.copy()
     dm = measures()
     dm.do_frame(obspos)
     dm.do_frame(phasecentre)
 
-    times = ms.getcol('TIME_CENTROID')
-    uvw = ms.getcol('UVW')
-    ant1 = ms.getcol('ANTENNA1')
-    ant2 = ms.getcol('ANTENNA2')
-    data = ms.getcol('PEELED_DATA')
     chans, _ = data[0].shape
 
     # Recalculate uvw for new phase position

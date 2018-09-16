@@ -168,7 +168,6 @@ def main():
     partitions = np.array(
         sorted(partitions, reverse=True, key=lambda xs: sum([x[0].flux(midfreq) + x[1].flux(midfreq) for x in xs]))
     )
-    partitions = partitions[0:5]
 
     # Read data minus flagged rows
     tbl = taql("select * from $ms where not FLAG_ROW")
@@ -179,24 +178,9 @@ def main():
     flags = tbl.getcol('FLAG')
     data[flags] = np.nan
 
-    # Subtract all sources from visibilities
-    print("Subtracting current best source models from visibilities...   0%", end="")
-    sys.stdout.flush()
-
-    # for i, (source_xx, source_yy) in enumerate(sources):
-    #     data[:, :, 0] -= source_xx.visibility(uvw, freqs, ra0, dec0)
-    #     source_xx.flush()
-    #     data[:, :, 3] -= source_yy.visibility(uvw, freqs, ra0, dec0)
-    #     source_yy.flush()
-
-    #     print("\b\b\b\b% 3d%%" % (i / len(sources) * 100), end="")
-    #     sys.stdout.flush()
-
     tbl.putcol('PEELED_DATA', data)
     del uvw
     del data
-
-    print("\b\b\b\bDone")
 
     for passno in range(args.passes):
         for i, partition in enumerate(partitions):

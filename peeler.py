@@ -167,11 +167,8 @@ def main():
     threshold = (3 / 60) * np.pi / 180
     partitions = spatial_partition(sources, threshold)
 
-    # Order sources by apparent flux at midfreq
-    partitions = sorted(
-        partitions, reverse=True, key=lambda xs: sum([x[0].flux(midfreq) + x[1].flux(midfreq) for x in xs])
-    )
-    partitions = partitions[0:10]
+
+    #partitions = partitions[0:10]
 
     # Read data minus flagged rows
     tbl = taql("select * from $ms where not FLAG_ROW")
@@ -183,10 +180,10 @@ def main():
     ant1.flags.writeable = False
     ant2 = tbl.getcol('ANTENNA2')
     ant2.flags.writeable = False
-    data = tbl.getcol(args.datacolumn)
+    data = tbl.getcol(args.datacolumn)[:, :, [True, False, False, True]].copy() # Just XX, YY
 
     # Handle flags by setting entries that are flagged as NaN
-    flags = tbl.getcol('FLAG')
+    flags = tbl.getcol('FLAG')[:, :, [True, False, False, True]]
     data[flags] = np.nan
 
     if args.workers > 0:
@@ -198,6 +195,13 @@ def main():
         print("Beginning pass %d...   0%%" % (passno + 1), end="")
         sys.stdout.flush()
         while i < len(partitions):
+            # Order sources by apparent flux at midfreq
+            partitions = sorted(
+                partitions, reverse=True, key=lambda xs: sum([x[0].flux(midfreq) + x[1].flux(midfreq) for x in xs])
+            )
+
+            # TODO: use prior partitions to estimate updated values for l,m of this partition
+
             # Find the next batch of partitions that are within some threshold
             # of the currently brightest partition due to process.
             fluxlimit = args.threshold * sum([
@@ -260,8 +264,19 @@ def main():
 
         print("")
 
+    for source_xx, source_yy in [s for p in partitions for s in p]:
+        print("---")
+        print(source_xx.params)
+        print(source_xx.flux(midfreq))
+        print(source_yy.params)
+        print(source_yy.flux(midfreq))
+
     print("\n Finishing peeling. Writing data back to disk...", end=" ")
-    tbl.putcol('PEELED_DATA', data)
+    sys.stdout.flush()
+    peeled = tbl.getcol(args.datacolumn)
+    peeled[:, :, 0] = data[:, :, 0]
+    peeled[:, :, 3] = data[:, :, 1]
+    tbl.putcol('PEELED_DATA', peeled)
     ms.close()
     with open('peeled.reg', 'w') as f:
         to_ds9_regions(f, partitions)
@@ -273,6 +288,7 @@ def peel_star(args):
 
 
 def peel(uvw, times, original, ant1, ant2, partition, antennas, freqs, obspos, ra0, dec0, args, add_back=False):
+    # TODO: thread xx and yy streams
     data = original.copy()
 
     # Add the current model of the source back into the data for subsequent passes
@@ -280,7 +296,7 @@ def peel(uvw, times, original, ant1, ant2, partition, antennas, freqs, obspos, r
         for source_xx, source_yy in partition:
             data[:, :, 0] += source_xx.visibility(uvw, freqs, ra0, dec0)
             source_xx.flush()
-            data[:, :, 3] += source_yy.visibility(uvw, freqs, ra0, dec0)
+            data[:, :, 1] += source_yy.visibility(uvw, freqs, ra0, dec0)
             source_yy.flush()
 
     # Phase rotate visibilities onto source to peel
@@ -312,7 +328,7 @@ def peel(uvw, times, original, ant1, ant2, partition, antennas, freqs, obspos, r
 
     # Average bands into chunks of width
     chans = len(freqs)
-    averaged = np.zeros((rotated.shape[0], chans // args.width, 4), dtype=np.complex)
+    averaged = np.zeros((rotated.shape[0], chans // args.width, 2), dtype=np.complex)
     for j in range(chans // args.width):
         with warnings.catch_warnings():
             # Ignore "Mean of empty slice" warnings (due to NaN values)
@@ -325,16 +341,20 @@ def peel(uvw, times, original, ant1, ant2, partition, antennas, freqs, obspos, r
 
     # Fit model to data
     # Fit to xx (0) and yy (3)
-    for k, pol in enumerate([0, 3]):
-        x0 = [p for source in partition for p in source[k].params]
+    for pol in [0, 1]:
+        x0 = [p for source in partition for p in source[pol].params]
+        lowbounds = [p for source in partition for p in source[pol].bounds[0]]
+        highbounds = [p for source in partition for p in source[pol].bounds[1]]
+
         ret = least_squares(
             residual,
             x0,
             #method='lm', # Doesn't work in multithreaded environment
+            bounds = (lowbounds, highbounds),
             args=(
                 uvw_rotated,
                 widefreqs,
-                [source[k] for source in partition],
+                [source[pol] for source in partition],
                 averaged[:, :, pol],
                 _ra0,
                 _dec0
@@ -348,15 +368,15 @@ def peel(uvw, times, original, ant1, ant2, partition, antennas, freqs, obspos, r
         # different number of params per source
         i = 0
         for source in partition:
-            n = len(source[k].params)
-            source[k].params = ret.x[i:i+n]
+            n = len(source[pol].params)
+            source[pol].params = ret.x[i:i+n]
             i += n
 
     # Subtract updated source model from data
     for source_xx, source_yy in partition:
         data[:, :, 0] -= source_xx.visibility(uvw, freqs, ra0, dec0)
         source_xx.flush()
-        data[:, :, 3] -= source_yy.visibility(uvw, freqs, ra0, dec0)
+        data[:, :, 1] -= source_yy.visibility(uvw, freqs, ra0, dec0)
         source_yy.flush()
 
     return np.subtract(data, original, out=data)
@@ -367,8 +387,6 @@ def phase_rotate(uvw, times, data, ant1, ant2, obspos, phasecentre, antennas, la
     dm = measures()
     dm.do_frame(obspos)
     dm.do_frame(phasecentre)
-
-    chans, _ = data[0].shape
 
     # Recalculate uvw for new phase position
     new_uvw = np.zeros_like(uvw)
@@ -387,13 +405,8 @@ def phase_rotate(uvw, times, data, ant1, ant2, obspos, phasecentre, antennas, la
         new_uvw[idx] = antenna_uvw[ant1[idx]] - antenna_uvw[ant2[idx]]
 
     # Calculate phase offset
-    # TODO: with clever broadcasting, can do this in one operation
     woffset = -2j * np.pi * (new_uvw.T[2] - uvw.T[2])
-    for chan in range(chans):
-        data[:, chan, 0] *= np.exp(woffset / lambdas[chan])
-        data[:, chan, 1] *= np.exp(woffset / lambdas[chan])
-        data[:, chan, 2] *= np.exp(woffset / lambdas[chan])
-        data[:, chan, 3] *= np.exp(woffset / lambdas[chan])
+    data *= np.exp(woffset[:, np.newaxis] / lambdas)[:, :, np.newaxis]
 
     return new_uvw, data
 
@@ -443,6 +456,23 @@ class Point(object):
         self.A2 = p[2]
         self.ra = p[3]
         self.dec = p[4]
+
+    bounds = (
+        [
+            -np.inf,
+            -np.inf,
+            -np.inf,
+            -2 * np.pi,
+            -np.pi,
+        ],
+        [
+            np.inf,
+            np.inf,
+            np.inf,
+            2 * np.pi,
+            np.pi,
+        ]
+    )
 
     def get_lm(self, ra0, dec0):
         return radec_to_lm(self.ra, self.dec, ra0, dec0)
@@ -498,7 +528,7 @@ class Gaussian(object):
         self.A0 = A0
         self.A1 = A1
         self.A2 = A2
-        self.major = major # FWHM, in units of what?
+        self.major = major # FWHM, in units of arcminutes
         self.minor = minor # FWHM
         self.pa = pa
         self.ra = ra
@@ -533,6 +563,29 @@ class Gaussian(object):
         self.ra = p[6]
         self.dec = p[7]
 
+    bounds = (
+        [
+            -np.inf,
+            -np.inf,
+            -np.inf,
+            0,
+            0,
+            -2 * np.pi,
+            -2 * np.pi,
+            -np.pi,
+        ],
+        [
+            np.inf,
+            np.inf,
+            np.inf,
+            10,
+            10,
+            2 * np.pi,
+            2 * np.pi,
+            np.pi,
+        ]
+    )
+
     def get_lm(self, ra0, dec0):
         return radec_to_lm(self.ra, self.dec, ra0, dec0)
 
@@ -561,9 +614,11 @@ class Gaussian(object):
             self.arr2 = np.empty((len(uvw), len(freqs)), np.complex)
             self.arr3 = np.empty((len(uvw), len(freqs)), np.complex)
 
-        A = self.flux(freq)
+        A = self.flux(freqs)
 
         l, m = self.get_lm(ra0, dec0)
+        major = np.sin((self.major / 60) * (np.pi / 180))
+        minor = np.sin((self.minor / 60) * (np.pi / 180))
 
         np.multiply(self.uvw_lambda[0], l, out=self.arr1)
         np.multiply(self.uvw_lambda[1], m, out=self.arr2)
@@ -576,8 +631,8 @@ class Gaussian(object):
 
         self.arr1 *= np.exp(
             -np.pi**2 / (4 * np.log(2)) * (
-                self.major**2 * (self.uvw_lambda[0] * np.cos(self.pa + np.pi / 2) - self.uvw_lambda[1] * np.sin(self.pa + np.pi / 2))**2 +
-                self.minor**2 * (self.uvw_lambda[0] * np.sin(self.pa + np.pi / 2) + self.uvw_lambda[1] * np.cos(self.pa + np.pi / 2))**2
+                major**2 * (self.uvw_lambda[0] * np.cos(self.pa + np.pi / 2) - self.uvw_lambda[1] * np.sin(self.pa + np.pi / 2))**2 +
+                minor**2 * (self.uvw_lambda[0] * np.sin(self.pa + np.pi / 2) + self.uvw_lambda[1] * np.cos(self.pa + np.pi / 2))**2
             )
         )
 

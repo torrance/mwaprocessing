@@ -29,7 +29,7 @@ grep -v '^#' $1 | while read obsid; do
     fi
   fi
 
-  jobid=$(cat $obsid/image_selfcal_scheduled 2>/dev/null || cat $obsid/image_selfcal_started 2>/dev/null || cat $obsid/image_selfcal_complete 2>/dev/null || echo '')
+  jobid=$(cat $obsid/selfcal_scheduled 2>/dev/null || cat $obsid/selfcal_started 2>/dev/null || cat $obsid/selfcal_complete 2>/dev/null || echo '')
   if [[ -n $jobid && ! -f $obsid/image_briggs0_scheduled && ! -f $obsid/image_briggs0_started && ! -f $obsid/image_briggs0_complete ]]; then
     jobid=$(sbatch -J "image.sh $obsid briggs 0" --workdir $obsid -d afterok:$jobid image.sh $obsid 'briggs 0' | cut -d ' ' -f 4)
     if [[ -n $jobid ]]; then

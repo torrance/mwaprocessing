@@ -1,4 +1,13 @@
 #! /bin/bash
+#SBATCH -M zeus
+#SBATCH --time=12:00:00
+#SBATCH --partition workq
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH -c 1
+#SBATCH --mail-type FAIL,TIME_LIMIT,TIME_LIMIT_90
+#SBATCH --mail-user torrance.hodgson@postgrad.curtin.edu.au
+#SBATCH --export=ABSMEM
 
 if command -v module < /dev/null; then
   set +x
@@ -18,18 +27,11 @@ rm obsid.csv || true
 touch obsid.csv
 
 for obsid in $(cat $1); do
-  echo "obs_id=${obsid}, job_type=c, timeres=4, freqres=40, edgewidth=80, conversion=ms, allowmissing=true, flagdcchannels=true" >> obsid.csv
+  if [[ ! -f ${obsid}_ms.zip ]]; then
+    echo "obs_id=${obsid}, job_type=c, timeres=4, freqres=40, edgewidth=80, conversion=ms, allowmissing=true, flagdcchannels=true" >> obsid.csv
+  fi
 done
 
 mwa_client -c obsid.csv -d .
 
-for obsid in $(cat $1); do
-  if [[ -f ${obsid}_ms.zip ]]; then
-    if [[ ! -d ${obsid} ]]; then
-      mkdir $obsid
-    fi
-    unzip -u -d ${obsid} ${obsid}_ms.zip
-  else
-    echo "No zip file found for $obsid"
-  fi
-done
+

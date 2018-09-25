@@ -37,7 +37,7 @@ mv cal_${label}_scheduled cal_${label}_started || touch cal_${label}_started
 
 # Clean up from any previous runs
 rm solutions-${label}.bin || true
-rm srclist_pumav3_EoR0aegean_EoR1pietro+ForA_${obsid}_peel200.txt || true
+rm srclist_pumav3_EoR0aegean_EoR1pietro+ForA_TGSSgalactic_${obsid}_peel200.txt || true
 rm model.txt || true
 
 # Apply previous calibration solution, if one is present
@@ -52,8 +52,8 @@ if [[ -f badantennae ]]; then
 fi
 
 # Construct sky model
-srclist_by_beam.py -x -m ${obsid}.metafits -s /home/torrance/srclist_pumav3_EoR0aegean_EoR1pietro+ForA.txt -n 200
-cat srclist_pumav3_EoR0aegean_EoR1pietro+ForA_${obsid}_peel200.txt | rts_to_skymodel.py > model.txt
+srclist_by_beam.py -x -m ${obsid}.metafits -s /home/torrance/srclist_pumav3_EoR0aegean_EoR1pietro+ForA_TGSSgalactic.txt -n 200
+cat srclist_pumav3_EoR0aegean_EoR1pietro+ForA_TGSSgalactic_${obsid}_peel200.txt | rts_to_skymodel.py > model.txt
 
 # Add ad-hoc sky models
 for model in $(ls | grep '^model\-' | grep '\.txt$'); do

@@ -40,7 +40,7 @@ def main():
     parser.add_argument('--passes', type=int, default=2)
     parser.add_argument('--minuv', type=float, default=0, help="Fit models only on baselines above this minimum uv distance (metres)")
     parser.add_argument('--workers', type=int, default=0)
-    parser.add_argument('--threshold', type=float, default=0.5)
+    parser.add_argument('--threshold', type=float, default=0.8)
     args = parser.parse_args()
 
     metafits = getheader(args.meta)
@@ -87,7 +87,6 @@ def main():
     ])
     widelambdas = speed_of_light / widefreqs
 
-
     antennas = table(args.ms + '/ANTENNA', ack=False).getcol('POSITION')
     antennas = dm.position(
         'itrf',
@@ -96,17 +95,16 @@ def main():
         quantity(antennas.T[2], 'm'),
     )
 
-
     # Create PEELED_DATA column if it does not exist
-    if ('PEELED_DATA' not in ms.colnames()):
-        print("Creating PEELED_DATA column...", end=" ")
+    if ('CORRECTED_DATA' not in ms.colnames()):
+        print("Creating CORRECTED_DATA column...", end=" ")
         sys.stdout.flush()
         coldesc = ms.getcoldesc('DATA')
-        coldesc['name'] = 'PEELED_DATA'
+        coldesc['name'] = 'CORRECTED_DATA'
         ms.addcols(coldesc)
 
         peeled = ms.getcol(args.datacolumn)
-        ms.putcol('PEELED_DATA', peeled)
+        ms.putcol('CORRECTED_DATA', peeled)
         print("Done")
 
     # Load models
@@ -165,9 +163,6 @@ def main():
     threshold = (3 / 60) * np.pi / 180
     partitions = spatial_partition(sources, threshold)
 
-
-    #partitions = partitions[0:10]
-
     # Read data minus flagged rows
     tbl = taql("select * from $ms where not FLAG_ROW")
     uvw = tbl.getcol('UVW')
@@ -184,20 +179,46 @@ def main():
     flags = tbl.getcol('FLAG')[:, :, [True, False, False, True]]
     data[flags] = np.nan
 
+    # For some reason, it is necessary to rotate onto
+    # the current phase direction. Somehow this makes future offsets
+    # internally self-consistent.
+    dm = measures()
+    phasecentre = dm.direction(
+        'j2000',
+        quantity(ra0, 'rad'),
+        quantity(dec0, 'rad'),
+    )
+
+    uvw, data = phase_rotate(
+        uvw,
+        times,
+        data,
+        ant1,
+        ant2,
+        obspos,
+        phasecentre,
+        antennas,
+        speed_of_light / freqs,
+    )
+    # tbl.putcol('UVW', uvw)
+    # d = tbl.getcol('DATA')
+    # d[:, :, [True, False, False, True]] = data
+    # tbl.putcol('DATA', d)
+
     if args.workers > 0:
         pool = Pool(args.workers)
 
     for passno in range(args.passes):
         i = 0
 
+        # Order sources by apparent flux at midfreq
+        partitions = sorted(
+            partitions, reverse=True, key=lambda xs: sum([x.flux(midfreq) for x in xs])
+        )
+
         print("Beginning pass %d...   0%%" % (passno + 1), end="")
         sys.stdout.flush()
         while i < len(partitions):
-            # Order sources by apparent flux at midfreq
-            partitions = sorted(
-                partitions, reverse=True, key=lambda xs: sum([x.flux(midfreq) for x in xs])
-            )
-
             # TODO: use prior partitions to estimate updated values for l,m of this partition
 
             # Find the next batch of partitions that are within some threshold
@@ -267,7 +288,7 @@ def main():
     peeled = tbl.getcol(args.datacolumn)
     peeled[:, :, 0] = data[:, :, 0]
     peeled[:, :, 3] = data[:, :, 1]
-    tbl.putcol('PEELED_DATA', peeled)
+    tbl.putcol('CORRECTED_DATA', peeled)
     ms.close()
     with open('peeled.reg', 'w') as f:
         to_ds9_regions(f, partitions)
@@ -336,8 +357,33 @@ def peel(uvw, times, original, ant1, ant2, partition, antennas, freqs, obspos, r
     # Fit model to data
     # Fit to xx (0) and yy (3)
     if passno == 0:
-        x0 = [p for source in partition for p in source.reduced_params]
+        x0 = [p for source in partition for p in source.minimal_params]
+        ret = least_squares(
+            minimal_residual,
+            x0,
+            #method='lm', # Doesn't work in multithreaded environment
+            args=(
+                uvw_rotated,
+                widefreqs,
+                partition,
+                averaged,
+                _ra0,
+                _dec0
+            )
+        )
+        if not ret.success:
+            print("Failed to converge")
 
+        # Save final values, accounting for potentially
+        # different number of params per source
+        i = 0
+        for source in partition:
+            print(np.exp(source.XX2), np.exp(source.YY2))
+            n = len(source.minimal_params)
+            source.minimal_params = ret.x[i:i+n]
+            i += n
+
+        x0 = [p for source in partition for p in source.reduced_params]
         ret = least_squares(
             reduced_residual,
             x0,
@@ -351,12 +397,14 @@ def peel(uvw, times, original, ant1, ant2, partition, antennas, freqs, obspos, r
                 _dec0
             )
         )
+        if not ret.success:
+            print("Failed to converge")
 
         # Save final values, accounting for potentially
         # different number of params per source
         i = 0
         for source in partition:
-            print(source.major, source.minor)
+            print(np.exp(source.XX2), np.exp(source.YY2), source.major, source.minor)
             n = len(source.reduced_params)
             source.reduced_params = ret.x[i:i+n]
             i += n
@@ -421,6 +469,21 @@ def phase_rotate(uvw, times, data, ant1, ant2, obspos, phasecentre, antennas, la
     return new_uvw, data
 
 
+def minimal_residual(x0, uvw, freqs, sources, V, ra0, dec0):
+    model = np.zeros_like(V)
+
+    i = 0
+    for source in sources:
+        n = len(source.minimal_params)
+        source.minimal_params = x0[i:i+n]
+        i += n
+
+        model += source.visibility(uvw, freqs, ra0, dec0)
+
+    residuals = abs((V - model).flatten())
+    return residuals[np.isfinite(residuals)]
+
+
 def reduced_residual(x0, uvw, freqs, sources, V, ra0, dec0):
     model = np.zeros_like(V)
 
@@ -462,6 +525,7 @@ class Point(object):
         self.ra = ra
         self.dec = dec
 
+        self.converged = True
         self.uvw_lambda = None
         self.arr1 = None
         self.arr2 = None
@@ -570,6 +634,22 @@ class Gaussian(object):
         self.arr1 = None
         self.arr2 = None
         self.arr3 = None
+
+    @property
+    def minimal_params(self):
+        return np.array([
+            self.XX2,
+            self.YY2,
+            self.ra,
+            self.dec,
+        ])
+
+    @minimal_params.setter
+    def minimal_params(self, p):
+        self.XX2 = p[0]
+        self.YY2 = p[1]
+        self.ra = p[2]
+        self.dec = p[3]
 
     @property
     def reduced_params(self):
@@ -719,7 +799,11 @@ def to_ds9_regions(f, sources):
     print("icrs", file=f)
     for i, partition in enumerate(sources):
         for source in partition:
-            print("point %.32fd %.32fd # point=circle color=green, text={%d}" % (source.ra * 180 / np.pi, source.dec * 180 / np.pi, i), file=f)
+            print("point %.32fd %.32fd # point=circle color=green text={%d}" % (
+                source.ra * 180 / np.pi,
+                source.dec * 180 / np.pi,
+                i,
+            ), file=f)
 
 
 def spatial_partition(sources, threshold):
@@ -798,6 +882,8 @@ def model_parser(f):
         parts = line.split()
         if parts[0] == 'source':
             models.append(source_parser(f))
+        elif parts[0] == '#':
+            pass
         else:
             print("Skymodel parsing error: %s" % line)
             exit(1)

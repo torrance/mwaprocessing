@@ -10,7 +10,7 @@ import astropy.units as u
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--meta', required=True)
+    parser.add_argument('meta')
     args = parser.parse_args()
 
     header = getheader(args.meta)

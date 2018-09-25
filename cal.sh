@@ -40,6 +40,10 @@ rm solutions-${label}.bin || true
 rm srclist_pumav3_EoR0aegean_EoR1pietro+ForA_TGSSgalactic_${obsid}_peel200.txt || true
 rm model.txt || true
 
+# Calibrate seems to require we are at the phase center
+phase_center=$(phasecenter.py ${obsid}.metafits)
+chgcentre ${obsid}.ms $phase_center
+
 # Apply previous calibration solution, if one is present
 # This is necessary when recovering from a failed job
 if [[ ! -z $prior ]]; then

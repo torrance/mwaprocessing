@@ -41,11 +41,10 @@ if [[ ! -z $prior ]]; then
   applysolutions ${obsid}.ms solutions-${prior}.bin
 fi
 
-# First chg phase centre to increase wsclean speed
-if [[ ! -f chgcentred ]]; then
-  chgcentre -minw -shiftback ${obsid}.ms
-  touch chgcentred
-fi
+# Change to pointing direction, then to minw
+pointing=$(pointing.py ${obsid}.metafits)
+chgcentre ${obsid}.ms $pointing
+chgcentre -minw -shiftback ${obsid}.ms
 
 # Do a shallow clean, to be used for selfcal
 scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)

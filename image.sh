@@ -71,10 +71,10 @@ rm ${obsid}-wsclean-${name}*.fits || true
 rm ${obsid}-${name}-stokes*.fits || true
 rm *.tmp || true
 
-if [[ ! -f chgcentred ]]; then
-  chgcentre -minw -shiftback ${obsid}.ms
-  touch chgcentred
-fi
+# Change to pointing direction, then to minw
+pointing=$(pointing.py ${obsid}.metafits)
+chgcentre ${obsid}.ms $pointing
+chgcentre -minw -shiftback ${obsid}.ms
 
 scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)
 wsclean $absmem -j 20 -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1.5 -auto-mask 3 $options ${obsid}.ms

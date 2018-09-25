@@ -49,7 +49,7 @@ fi
 
 # Do a shallow clean, to be used for selfcal
 scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)
-wsclean -name ${obsid}-wsclean-${label} -j 20 -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs -2 -size 8000 8000 -scale $scale -niter 300000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
+wsclean -name ${obsid}-wsclean-${label} -j 20 -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs -2 -size 9000 9000 -scale $scale -niter 300000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
 
 # Create a beam if it doesn't already exist
 if [[ ! -f ${obsid}-beam8000px-xxi.fits ]]; then
@@ -71,5 +71,7 @@ calibrate -minuv 60 -j 20 -i 500 $absmem ${obsid}.ms solutions-${label}.bin
 applysolutions ${obsid}.ms solutions-${label}.bin
 
 aoflagger ${obsid}.ms
+
+aocal_plot.py solutions-${label}.bin
 
 mv ${label}_started ${label}_complete

@@ -19,7 +19,7 @@ OPTS=$(getopt --options $SHORT --longoptions $LONG --name "$0" -- "$@")
 eval set -- "$OPTS"
 
 # Default values
-size=8000
+size=9000
 options=""
 
 while true; do

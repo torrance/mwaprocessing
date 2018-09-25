@@ -55,6 +55,11 @@ fi
 srclist_by_beam.py -x -m ${obsid}.metafits -s /home/torrance/srclist_pumav3_EoR0aegean_EoR1pietro+ForA.txt -n 200
 cat srclist_pumav3_EoR0aegean_EoR1pietro+ForA_${obsid}_peel200.txt | rts_to_skymodel.py > model.txt
 
+# Add ad-hoc sky models
+for model in $(ls | grep '^model\-' | grep '\.txt$'); do
+  cat $model | grep -v 'skymodel' >> model.txt
+done
+
 if [[ -z $prior ]]; then
   # Ignore previous calibration attempts if no prior is provided
   data="-datacolumn DATA"

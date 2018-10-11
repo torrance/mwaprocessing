@@ -50,6 +50,13 @@ if [[ ! -z $prior ]]; then
   applysolutions ${obsid}.ms solutions-${prior}.bin
 fi
 
+# Flag any tiles that MWA ops have flagged
+# This should be handled automatically but is a bug in Cotter at the moment
+flagged=$(getflaggedtiles.py ${obsid}.metafits)
+if [[ ! -z $flagged ]]; then
+  echo $flagged | xargs flagantennae ${obsid}.ms
+fi
+
 # Flag tiles if badantennae file is present
 if [[ -f badantennae ]]; then
   cat badantennae | xargs flagantennae ${obsid}.ms

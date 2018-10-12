@@ -39,7 +39,7 @@ def main():
             exit(1)
 
         if channels == {int(ch) for ch in cal[18:]}:
-            print(cal[0])
+            print(cal[0], cal[13])
             exit(0)
 
 

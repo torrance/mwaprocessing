@@ -23,7 +23,7 @@ grep -v '^#' $1 | while read obsid; do
     fi
 
     echo $obsid $calibrator
-    jobid=$(sbatch -J "cal-target.sh $obsid $calibrator" --workdir $obsid cal-target.sh $obsid $calibrator | cut -d ' ' -f 4)
+    jobid=$(sbatch -J "cal-target.sh $obsid $calibrator" --workdir $obsid cal-target.sh $obsid $calibrator ~/mwaprocessing/models | cut -d ' ' -f 4)
     if [[ -n $jobid ]]; then
       echo $jobid > $obsid/cal_target_scheduled
     fi

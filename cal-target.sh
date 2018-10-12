@@ -26,6 +26,7 @@ fi
 
 obsid=$1
 calibrator=$2
+dir=$3
 
 mv cal_target_scheduled cal_target_started || touch cal_target_started
 
@@ -40,8 +41,7 @@ if [[ ! -z $flagged ]]; then
 fi
 
 # Get calibrator model
-model=$(dirname "$0")
-model=${model}/models/${calibrator}.txt
+model=${dir}/${calibrator}.txt
 
 for _ in {1..2}; do
   calibrate $absmem -m $model -minuv 60 -maxuv 2600 -applybeam -j 20 -i 500 ${obsid}.ms solutions-target.bin

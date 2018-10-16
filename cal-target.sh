@@ -44,11 +44,15 @@ fi
 model=${dir}/${calibrator}.txt
 
 for _ in {1..2}; do
+  aoflagger ${obsid}.ms
   calibrate $absmem -m $model -minuv 60 -maxuv 2600 -applybeam -j 20 -i 500 ${obsid}.ms solutions-target.bin
   applysolutions ${obsid}.ms solutions-target.bin
-  aoflagger ${obsid}.ms
 done
 
+# Calibrate at 2t intervals as a metric for ionispheric weather
+calibrate $absmem -m $model -minuv 60 -maxuv 2600 -t 2 -applybeam -j 20 -i 500 ${obsid}.ms solutions-target-t2.bin
+
+# Plot calibration
 aocal_plot.py solutions-target.bin
 
 mv cal_target_started cal_target_complete

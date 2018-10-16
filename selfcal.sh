@@ -35,11 +35,19 @@ rm ${obsid}-wsclean-${label}*.fits || true
 rm ${obsid}-${label}-stokes*.fits || true
 rm *.tmp || true
 
+# Flag tiles if badantennae file is present
+if [[ -f badantennae ]]; then
+  cat badantennae | xargs flagantennae ${obsid}.ms
+fi
+
 # Apply previous calibration solution, if one is present
 # This is necessary when recovering from a failed job
 if [[ ! -z $prior ]]; then
   applysolutions ${obsid}.ms solutions-${prior}.bin
 fi
+
+# Flag data
+aoflagger ${obsid}.ms
 
 # Change to pointing direction, then to minw
 pointing=$(pointing.py ${obsid}.metafits)

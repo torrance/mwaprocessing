@@ -69,6 +69,7 @@ mv image_${name}_scheduled  image_${name}_started || touch image_${name}_started
 # Clean up any files from previous job
 rm ${obsid}-wsclean-${name}*.fits || true
 rm ${obsid}-${name}-stokes*.fits || true
+rm ${obsid}-beam*.fits || true
 rm *.tmp || true
 
 # Change to pointing direction, then to minw
@@ -79,17 +80,15 @@ chgcentre -minw -shiftback ${obsid}.ms
 scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)
 wsclean $absmem -j 20 -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1.5 -auto-mask 3 $options ${obsid}.ms
 
-# Create a beam if it doesn't already exist
-if [[ ! -f ${obsid}-beam${size}px-xxi.fits ]]; then
-  make_beam.py -f ${obsid}-wsclean-${name}-XX-image.fits -m ${obsid}.metafits --model 2016 --jones
+# Create beam fits
+make_beam.py -f ${obsid}-wsclean-${name}-XX-image.fits -m ${obsid}.metafits --model 2016 --jones
 
-  # Rename make_beam.py output for pbcorrect
-  for file in $(ls | grep XX-image_beam.*\.fits); do
-    pol=$(echo $file | sed 's/.*image_beam\(.*\)\.fits/\1/' | tr '[:upper:]' '[:lower:]')
-    mv $file ${obsid}-beam${size}px-${pol}.fits
-  done
-fi
+# Rename make_beam.py output for pbcorrect
+for file in $(ls | grep XX-image_beam.*\.fits); do
+  pol=$(echo $file | sed 's/.*image_beam\(.*\)\.fits/\1/' | tr '[:upper:]' '[:lower:]')
+  mv $file ${obsid}-beam-${pol}.fits
+done
 
-pbcorrect ${obsid}-wsclean-${name} image.fits ${obsid}-beam${size}px ${obsid}-${name}-stokes
+pbcorrect ${obsid}-wsclean-${name} image.fits ${obsid}-beam ${obsid}-${name}-stokes
 
 mv image_${name}_started image_${name}_complete

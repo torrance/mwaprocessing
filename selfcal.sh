@@ -33,6 +33,7 @@ mv ${label}_scheduled  ${label}_started || touch ${label}_started
 rm solutions-${label}.bin || true
 rm ${obsid}-wsclean-${label}*.fits || true
 rm ${obsid}-${label}-stokes*.fits || true
+rm ${obsid}-beam*.fits || true
 rm *.tmp || true
 
 # Flag tiles if badantennae file is present
@@ -58,19 +59,17 @@ chgcentre -minw -shiftback ${obsid}.ms
 scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)
 wsclean -name ${obsid}-wsclean-${label} -j 20 -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs -2 -size 9000 9000 -scale $scale -niter 300000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
 
-# Create a beam if it doesn't already exist
-if [[ ! -f ${obsid}-beam8000px-xxi.fits ]]; then
-  make_beam.py -f ${obsid}-wsclean-${label}-XX-image.fits -m ${obsid}.metafits --model 2016 --jones
+# Create beam fits
+make_beam.py -f ${obsid}-wsclean-${label}-XX-image.fits -m ${obsid}.metafits --model 2016 --jones
 
-  # Rename make_beam.py output for pbcorrect
-  for file in $(ls | grep XX-image_beam.*\.fits); do
-    pol=$(echo $file | sed 's/.*image_beam\(.*\)\.fits/\1/' | tr '[:upper:]' '[:lower:]')
-    mv $file ${obsid}-beam8000px-${pol}.fits
-  done
-fi
+# Rename make_beam.py output for pbcorrect
+for file in $(ls | grep XX-image_beam.*\.fits); do
+  pol=$(echo $file | sed 's/.*image_beam\(.*\)\.fits/\1/' | tr '[:upper:]' '[:lower:]')
+  mv $file ${obsid}-beam-${pol}.fits
+done
 
 # Output image of selfcal
-pbcorrect ${obsid}-wsclean-${label} image.fits ${obsid}-beam8000px ${obsid}-${label}-stokes
+pbcorrect ${obsid}-wsclean-${label} image.fits ${obsid}-beam ${obsid}-${label}-stokes
 
 # Selfcal
 calibrate -minuv 60 -j 20 -i 500 $absmem ${obsid}.ms solutions-${label}.bin

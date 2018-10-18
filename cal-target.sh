@@ -7,7 +7,7 @@
 #SBATCH -c 20
 #SBATCH --mail-type FAIL,TIME_LIMIT,TIME_LIMIT_90
 #SBATCH --mail-user torrance.hodgson@postgrad.curtin.edu.au
-#SBATCH --export=ABSMEM
+#SBATCH --export=ABSMEM,BASEDIR
 
 set -e
 set -x
@@ -26,7 +26,6 @@ fi
 
 obsid=$1
 calibrator=$2
-dir=$3
 
 mv cal_target_scheduled cal_target_started || touch cal_target_started
 
@@ -41,16 +40,16 @@ if [[ ! -z $flagged ]]; then
 fi
 
 # Get calibrator model
-model=${dir}/${calibrator}.txt
+model=${BASEDIR}/models/${calibrator}.txt
 
 for _ in {1..2}; do
   aoflagger ${obsid}.ms
-  calibrate $absmem -m $model -minuv 60 -maxuv 2600 -applybeam -j 20 -i 500 ${obsid}.ms solutions-target.bin
+  calibrate $absmem -m $model -minuv 60 -maxuv 2600 -applybeam -i 500 -mwa-path $BASEDIR ${obsid}.ms solutions-target.bin
   applysolutions ${obsid}.ms solutions-target.bin
 done
 
 # Calibrate at 2t intervals as a metric for ionispheric weather
-calibrate $absmem -m $model -minuv 60 -maxuv 2600 -t 2 -applybeam -j 20 -i 500 ${obsid}.ms solutions-target-t2.bin
+calibrate $absmem -m $model -minuv 60 -maxuv 2600 -t 2 -applybeam -i 500 -mwa-path $BASEDIR ${obsid}.ms solutions-target-t2.bin
 
 # Plot calibration
 aocal_plot.py solutions-target.bin

@@ -24,8 +24,8 @@ def find_dirs(parent, force):
     for child in children:
         entries = os.listdir(child)
         if (
-            'solutions-pre_amp.png' in entries
-            and 'solutions-pre_phase.png' in entries
+            'solutions-target_amp.png' in entries
+            and 'solutions-target_phase.png' in entries
             and ('badantennae' not in entries or force)
         ):
             dirs.append(child)
@@ -40,7 +40,7 @@ def inspect(d):
     except (IOError, OSError) as e:
         pass
 
-    for plot in ['/solutions-pre_amp.png', '/solutions-pre_phase.png']:
+    for plot in ['/solutions-target_amp.png', '/solutions-target_phase.png']:
         subprocess.call(['imgcat', d + plot])
         while True:
             txt = raw_input("Enter bad tiles (" + ' '.join([str(x) for x in bad]) + "):")

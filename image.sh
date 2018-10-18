@@ -78,7 +78,7 @@ chgcentre ${obsid}.ms $pointing
 chgcentre -minw -shiftback ${obsid}.ms
 
 scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)
-wsclean $absmem -j 20 -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1.5 -auto-mask 3 $options ${obsid}.ms
+wsclean $absmem -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1.5 -auto-mask 3 $options ${obsid}.ms
 
 # Create beam fits
 make_beam.py -f ${obsid}-wsclean-${name}-XX-image.fits -m ${obsid}.metafits --model 2016 --jones

@@ -1,13 +1,12 @@
 #! /bin/bash
-#SBATCH -M galaxy
+#SBATCH -M magnus
+#SBATCH --account pawsey0272
 #SBATCH --time=04:00:00
 #SBATCH --partition workq
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH -c 20
 #SBATCH --mail-type FAIL,TIME_LIMIT,TIME_LIMIT_90
 #SBATCH --mail-user torrance.hodgson@postgrad.curtin.edu.au
-#SBATCH --export=ABSMEM
+#SBATCH --export=ABSMEM,BASEDIR
 
 set -e
 set -x
@@ -75,7 +74,7 @@ if [[ -z $prior ]]; then
   # Ignore previous calibration attempts if no prior is provided
   data="-datacolumn DATA"
 fi
-calibrate $absmem $data -minuv 60 -maxuv 2600 -m model.txt -applybeam -i 500 ${obsid}.ms solutions-${label}.bin
+calibrate $absmem $data -mwa-path $BASEDIR -minuv 60 -maxuv 2600 -m model.txt -applybeam -i 500 ${obsid}.ms solutions-${label}.bin
 
 applysolutions ${obsid}.ms solutions-${label}.bin
 

@@ -1,13 +1,12 @@
 #! /bin/bash
-#SBATCH -M galaxy
+#SBATCH -M magnus
+#SBATCH --account pawsey0272
 #SBATCH --time=12:00:00
 #SBATCH --partition workq
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH -c 20
 #SBATCH --mail-type FAIL,TIME_LIMIT,TIME_LIMIT_90
 #SBATCH --mail-user torrance.hodgson@postgrad.curtin.edu.au
-#SBATCH --export=ABSMEM
+#SBATCH --export=ABSMEM,BASEDIR
 
 set -e
 set -x
@@ -78,7 +77,7 @@ chgcentre ${obsid}.ms $pointing
 chgcentre -minw -shiftback ${obsid}.ms
 
 scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)
-wsclean $absmem -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1.5 -auto-mask 3 $options ${obsid}.ms
+wsclean $absmem -mwa-path $BASEDIR -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1.5 -auto-mask 3 $options ${obsid}.ms
 
 # Create beam fits
 make_beam.py -f ${obsid}-wsclean-${name}-XX-image.fits -m ${obsid}.metafits --model 2016 --jones

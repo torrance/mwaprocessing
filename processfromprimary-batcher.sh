@@ -9,13 +9,15 @@ if [[ -z $1 ]]; then
 fi
 
 grep -v '^#' $1 | while read obsid; do
-  if [[ ! -f $obsid/solutions-primary.bin && ! -f $obsid/badantennae ]]; then
+  if [[ ! -f $obsid/solutions-primary.bin || ! -f $obsid/badantennae ]]; then
     continue
   fi
 
-  jobid=$(sbatch -J "selfcal.sh $obsid primary" --workdir $obsid selfcal.sh $obsid selfcal primary | cut -d ' ' -f 4)
-  if [[ -n $jobid ]]; then
-    echo $jobid > $obsid/selfcal_scheduled
+  if [[ ! -f $obsid/selfcal_scheduled && ! -f $obsid/selfcal_started && ! -f $obsid/selfcal_complete ]]; then
+    jobid=$(sbatch -J "selfcal.sh $obsid primary" --workdir $obsid selfcal.sh $obsid selfcal primary | cut -d ' ' -f 4)
+    if [[ -n $jobid ]]; then
+      echo $jobid > $obsid/selfcal_scheduled
+    fi
   fi
 
   jobid=$(cat $obsid/selfcal_scheduled 2>/dev/null || cat $obsid/selfcal_started 2>/dev/null || cat $obsid/selfcal_complete 2>/dev/null || echo '')

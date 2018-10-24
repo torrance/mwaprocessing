@@ -38,7 +38,7 @@ def main():
                 model_ra.append(ra)
                 model_dec.append(dec)
 
-    model = SkyCoord(ra=model_ra, dec=model_dec)
+    model = SkyCoord(ra=model_ra, dec=model_dec, unit=(u.degree, u.degree))
 
     # Get Aegean sources
     sources_ra, sources_dec = [], []
@@ -50,7 +50,7 @@ def main():
             sources_ra.append(float(ra))
             sources_dec.append(float(dec))
 
-    sources = SkyCoord(ra=sources_ra, dec=sources_dec, unit='degree')
+    sources = SkyCoord(ra=sources_ra, dec=sources_dec, unit=(u.degree, u.degree))
 
     print("Searching for nearby sources...", file=sys.stderr)
     idx_sources, idx_model, d2d, _ = model.search_around_sky(sources, region*u.degree)

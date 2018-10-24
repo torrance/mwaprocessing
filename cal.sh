@@ -74,7 +74,7 @@ if [[ -z $prior ]]; then
   # Ignore previous calibration attempts if no prior is provided
   data="-datacolumn DATA"
 fi
-calibrate $absmem $data -mwa-path $BASEDIR -minuv 60 -maxuv 2600 -m model.txt -applybeam -i 500 ${obsid}.ms solutions-${label}.bin
+calibrate $absmem $data -mwa-path $BASEDIR -minuv 60 -maxuv 2600 -m model.txt -applybeam -i 500 -mwa-path $BASEDIR -ch 4 ${obsid}.ms solutions-${label}.bin
 
 applysolutions ${obsid}.ms solutions-${label}.bin
 

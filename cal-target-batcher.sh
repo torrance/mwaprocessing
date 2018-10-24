@@ -23,9 +23,17 @@ grep -v '^#' $1 | while read obsid; do
     fi
 
     echo $obsid $calibrator
-    jobid=$(sbatch -J "cal-target.sh $obsid $calibrator" --workdir $obsid cal-target.sh $obsid $calibrator ~/mwaprocessing/models | cut -d ' ' -f 4)
+    jobid=$(sbatch -J "cal-target.sh $obsid $calibrator" --workdir $obsid cal-target.sh $obsid $calibrator | cut -d ' ' -f 4)
     if [[ -n $jobid ]]; then
       echo $jobid > $obsid/cal_target_scheduled
+    fi
+  fi
+
+  jobid=$(cat $obsid/cal_target_scheduled 2>/dev/null || cat $obsid/cal_target_started 2>/dev/null || cat $obsid/cal_target_complete 2>/dev/null || echo '')
+  if [[ -n $jobid && ! -f $obsid/selfcal_scheduled && ! -f $obsid/selfcal_started && ! -f $obsid/selfcal_complete ]]; then
+    jobid=$(sbatch -J "selfcal.sh $obsid" --workdir $obsid -d afterok:$jobid selfcal.sh $obsid selfcal target | cut -d ' ' -f 4)
+    if [[ -n $jobid ]]; then
+      echo $jobid > $obsid/selfcal_scheduled
     fi
   fi
 done

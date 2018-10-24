@@ -6,7 +6,7 @@
 #SBATCH --nodes=1
 #SBATCH --mail-type FAIL,TIME_LIMIT,TIME_LIMIT_90
 #SBATCH --mail-user torrance.hodgson@postgrad.curtin.edu.au
-#SBATCH --export=ABSMEM
+#SBATCH --export=ABSMEM,BASEDIR
 
 set -e
 set -x
@@ -71,7 +71,7 @@ done
 pbcorrect ${obsid}-wsclean-${label} image.fits ${obsid}-beam ${obsid}-${label}-stokes
 
 # Selfcal
-calibrate -minuv 60 -j 20 -i 500 $absmem ${obsid}.ms solutions-${label}.bin
+calibrate -minuv 60 -j 20 -i 500 $absmem -mwa-path $BASEDIR -ch 4 ${obsid}.ms solutions-${label}.bin
 
 applysolutions ${obsid}.ms solutions-${label}.bin
 

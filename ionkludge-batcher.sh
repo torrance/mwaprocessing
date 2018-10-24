@@ -15,7 +15,7 @@ fi
 
 grep -v '^#' $1 | while read obsid; do
   # Test for whether the image exists
-  if [[ ! -f ${1}-${2}.fits ]]; then
+  if [[ ! -f ${obsid}/${obsid}-${2}.fits ]]; then
     continue
   fi
 

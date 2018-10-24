@@ -62,7 +62,7 @@ if [[ -f badantennae ]]; then
 fi
 
 # Construct sky model
-srclist_by_beam.py -x -m ${obsid}.metafits -s /home/torrance/srclist_pumav3_EoR0aegean_EoR1pietro+ForA_TGSSgalactic.txt -n 200
+srclist_by_beam.py -x -m ${obsid}.metafits -s $BASEDIR/srclist_pumav3_EoR0aegean_EoR1pietro+ForA_TGSSgalactic.txt -n 200
 cat srclist_pumav3_EoR0aegean_EoR1pietro+ForA_TGSSgalactic_${obsid}_peel200.txt | rts_to_skymodel.py > model.txt
 
 # Add ad-hoc sky models

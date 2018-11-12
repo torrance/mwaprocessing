@@ -94,7 +94,7 @@ def make_pix_models(fname, ra1='ra', dec1='dec', ra2='RAJ2000', dec2='DEJ2000', 
             print("seaborne not detected; using hsv color scheme")
             cmap = 'hsv'
 # Attractive serif fonts
-        if which("latex"):
+        if False and which("latex"):
             try:
                 from matplotlib import rc
                 rc('text', usetex=True)
@@ -456,7 +456,7 @@ if __name__ == "__main__":
                 print("Wrote {0}".format(results.corrected))
 
     if results.infits is not None:
-        fnames = glob.glob(results.infits) 
+        fnames = glob.glob(results.infits)
         # Use the first image to define the model
         dx, dy = make_pix_models(results.xm, results.ra1, results.dec1, results.ra2, results.dec2,
                                  fnames[0], results.plot, results.smooth, results.sigcol, results.noisecol, results.SNR)

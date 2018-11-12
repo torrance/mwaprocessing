@@ -18,7 +18,7 @@ OPTS=$(getopt --options $SHORT --longoptions $LONG --name "$0" -- "$@")
 eval set -- "$OPTS"
 
 # Default values
-size=9000
+size=8000
 options=""
 
 while true; do
@@ -76,7 +76,7 @@ pointing=$(pointing.py ${obsid}.metafits)
 chgcentre ${obsid}.ms $pointing
 chgcentre -minw -shiftback ${obsid}.ms
 
-scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)
+scale=$(echo "scale=6; 0.6 / $(getchan.py ${obsid}.metafits)" | bc)
 wsclean $absmem -mwa-path $BASEDIR -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1.5 -auto-mask 3 $options ${obsid}.ms
 
 # Create beam fits

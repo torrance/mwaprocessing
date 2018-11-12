@@ -55,8 +55,8 @@ chgcentre ${obsid}.ms $pointing
 chgcentre -minw -shiftback ${obsid}.ms
 
 # Do a shallow clean, to be used for selfcal
-scale=$(echo "scale=6; 0.5 / $(getchan.py ${obsid}.metafits)" | bc)
-wsclean -name ${obsid}-wsclean-${label} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs -2 -size 9000 9000 -scale $scale -niter 300000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
+scale=$(echo "scale=6; 0.6 / $(getchan.py ${obsid}.metafits)" | bc)
+wsclean -name ${obsid}-wsclean-${label} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs -2 -size 8000 8000 -scale $scale -niter 300000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
 
 # Create beam fits
 make_beam.py -f ${obsid}-wsclean-${label}-XX-image.fits -m ${obsid}.metafits --model 2016 --jones

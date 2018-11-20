@@ -11,6 +11,31 @@
 set -e
 set -x
 
+# Parse parameters
+SHORT='o:'
+LONG='options:'
+OPTS=$(getopt --options $SHORT --longoptions $LONG --name "$0" -- "$@")
+eval set -- "$OPTS"
+
+# Default values
+options=""
+
+while true; do
+  case "$1" in
+    -o | --options )
+      options="$2"
+      shift 2
+      ;;
+    -- )
+      shift
+      break
+      ;;
+    * )
+      break;
+      ;;
+  esac
+done
+
 if command -v module < /dev/null; then
   set +x
   module load pyfits
@@ -74,7 +99,7 @@ if [[ -z $prior ]]; then
   # Ignore previous calibration attempts if no prior is provided
   data="-datacolumn DATA"
 fi
-calibrate $absmem $data -mwa-path $BASEDIR -minuv 60 -maxuv 2600 -m model.txt -applybeam -i 500 -mwa-path $BASEDIR -ch 4 ${obsid}.ms solutions-${label}.bin
+calibrate $absmem $data -mwa-path $BASEDIR -minuv 60 -maxuv 2600 -m model.txt -applybeam -i 500 -mwa-path $BASEDIR -ch 4 $options ${obsid}.ms solutions-${label}.bin
 
 applysolutions ${obsid}.ms solutions-${label}.bin
 

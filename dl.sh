@@ -26,7 +26,7 @@ fi
 rm obsid.csv || true
 touch obsid.csv
 
-for obsid in $(cat $1); do
+grep -v '^#' $1 | while read obsid; do
   if [[ ! -f ${obsid}_ms.zip ]]; then
     echo "obs_id=${obsid}, job_type=c, timeres=4, freqres=40, edgewidth=80, conversion=ms, allowmissing=true, flagdcchannels=true" >> obsid.csv
   fi

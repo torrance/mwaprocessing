@@ -14,7 +14,8 @@ from astropy.wcs import WCS
 from casacore.tables import table, taql
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.interpolate import griddata
+from scipy.interpolate import griddata, CloughTocher2DInterpolator
+from scipy.ndimage import gaussian_filter
 
 
 def main():
@@ -32,7 +33,8 @@ def main():
     # Open measurement set, and find central time and frequency
     ms = table(args.ms)
     times = sorted(set(ms.getcol('TIME_CENTROID')))
-    times = [times[len(times) // 2]]  # We just starting with the central time
+    midtime  = (max(times) + min(times)) / 2  # We just starting with the central time
+    nearesttime = min(times, key=lambda x: abs(x - midtime))
     freqs = table(args.ms + '::SPECTRAL_WINDOW').getcell('CHAN_FREQ', 0)  # Assume just one SPW entry
     midfreq = (max(freqs) + min(freqs)) / 2
 
@@ -71,7 +73,7 @@ def main():
 
     print("Creating TEC image of dimesions (%d, %d)" % (width, height), file=sys.stdout)
 
-    data = np.zeros((len(times), 1, 128, height, width), dtype=np.float)  # [time, frequency, antennas, dec, ra]
+    data = np.zeros((1, 1, 128, height, width), dtype=np.float)  # [time, frequency, antennas, dec, ra]
     Atec = fits.PrimaryHDU(data)
 
     Atec.header['CTYPE1'] = 'RA---SIN'
@@ -98,7 +100,7 @@ def main():
 
     Atec.header['CTYPE5'] = 'TIME'
     Atec.header['CRPIX5'] = 1
-    Atec.header['CRVAL5'] = times[0]  # FIXME
+    Atec.header['CRVAL5'] = midtime  # FIXME
     Atec.header['CDELT5'] = 1
 
     wcs = WCS(Atec.header)
@@ -109,28 +111,51 @@ def main():
     source_positions = np.radians(np.array([xm['source_ra'], xm['source_dec']]))
     offsets = np.sin(model_positions - source_positions)
 
+    # Filter out extreme offsets
+    separations = angular_separation(model_positions[0], model_positions[1], source_positions[0], source_positions[1])
+    exclusions = separations > 2 * np.median(separations)
+    print("Excluding %d / %d extremal offsets" % (sum(exclusions), len(exclusions)))
+    model_positions = model_positions[:, ~exclusions]
+    source_positions = source_positions[:, ~exclusions]
+    offsets = offsets[:, ~exclusions]
+
     model_positions_lm = radec_to_lm(model_positions[0], model_positions[1], center.ra.rad, center.dec.rad)
 
-    # Get l,m values for TEC file
-    xx, yy = np.meshgrid(range(0, width), range(0, height))
+    # Get oversampled l,m values for TEC file
+    xx, yy = np.meshgrid(range(0, 3 * width), range(0, 3 * height))
     pixels = np.array([xx.flatten(), yy.flatten()]).T
 
-    ret = wcs.all_pix2world([[x, y, 0, 0, 0] for x, y in pixels], 0)
+    ret = wcs.all_pix2world([[x / 3 - 1/3, y / 3 - 1/3, 0, 0, 0] for x, y in pixels], 0)
     grid_lm = radec_to_lm(np.radians(ret.T[0]), np.radians(ret.T[1]), center.ra.rad, center.dec.rad)
 
     # Compute interpolated position offsets
     delta_l = griddata(model_positions_lm.T, offsets[0], grid_lm.T, fill_value=0)
     delta_m = griddata(model_positions_lm.T, offsets[1], grid_lm.T, fill_value=0)
 
+    delta_l = np.reshape(delta_l, (3*height, 3*width))  # [ dec, ra ]
+    delta_m = np.reshape(delta_m, (3*height, 3*width))
+
+    # Gaussian smooth
+    delta_l = gaussian_filter(delta_l, 3, mode='constant', cval=0)
+    delta_m = gaussian_filter(delta_m, 3, mode='constant', cval=0)
+
+    # Downsample
+    delta_l = delta_l[1::3, 1::3]
+    delta_m = delta_m[1::3, 1::3]
+
+    # Create downsampled grid
+    xx, yy = np.meshgrid(range(0, width), range(0, height))
+    pixels = np.array([xx.flatten(), yy.flatten()]).T
+    ret = wcs.all_pix2world([[x, y, 0, 0, 0] for x, y in pixels], 0)
+    grid_lm = radec_to_lm(np.radians(ret.T[0]), np.radians(ret.T[1]), center.ra.rad, center.dec.rad)
+
     # Plot interpolation
     plt.figure()
     plt.quiver(model_positions_lm[0], model_positions_lm[1], offsets[0], offsets[1], angles='xy', scale=0.01, scale_units='xy')
-    plt.quiver(grid_lm[0], grid_lm[1], delta_l, delta_m, angles='xy', scale=0.01, scale_units='xy', color='gray')
+    plt.quiver(grid_lm[0], grid_lm[1], delta_l.flatten(), delta_m.flatten(), angles='xy', scale=0.01, scale_units='xy', color='gray')
     plt.gca().invert_xaxis()
     plt.show()
 
-    delta_l = np.reshape(delta_l, (height, width))  # [ dec, ra ]
-    delta_m = np.reshape(delta_m, (height, width))
 
     # Create debugging fits files
     for delta, name in [(delta_l, 'delta-l'), (delta_m, 'delta-m')]:
@@ -138,12 +163,12 @@ def main():
         hdu.header = Atec.header.copy()
         hdu.writeto(name + '.fits', overwrite=True)
 
-    for i, time in enumerate(times):
+    for i, time in enumerate([midtime]):
         for ant in range(1, 128):
             sys.stderr.write("\rCalculating antenna %d..." % ant)
             sys.stderr.flush()
 
-            tbl = taql("select UVW from $ms where TIME_CENTROID = $time and ANTENNA1 = 0 and ANTENNA2 = $ant")
+            tbl = taql("select UVW from $ms where TIME_CENTROID = $nearesttime and ANTENNA1 = 0 and ANTENNA2 = $ant")
 
             if len(tbl) == 0:
                 continue
@@ -175,6 +200,15 @@ def radec_to_lm(ra, dec, ra0, dec0):
     l = cosDec * sinDeltaAlpha
     m = sinDec * cosDec0 - cosDec * sinDec0 * cosDeltaAlpha
     return np.array([l, m])
+
+
+def angular_separation(ra1, dec1, ra2, dec2):
+    """
+    RA, Dec given in radians
+    """
+    return np.arccos(
+        np.sin(dec1) * np.sin(dec2) + np.cos(dec1) * np.cos(dec2) * np.cos(ra1 - ra2)
+    )
 
 
 if __name__ == '__main__':

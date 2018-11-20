@@ -18,7 +18,7 @@ OPTS=$(getopt --options $SHORT --longoptions $LONG --name "$0" -- "$@")
 eval set -- "$OPTS"
 
 # Default values
-size=8000
+size=7500
 options=""
 
 while true; do
@@ -33,6 +33,10 @@ while true; do
       ;;
     -n | --name )
       name="$2"
+      shift 2
+      ;;
+    -p | --position )
+      position="$2"
       shift 2
       ;;
     -- )
@@ -72,22 +76,13 @@ rm ${obsid}-beam*.fits || true
 rm *.tmp || true
 
 # Change to pointing direction, then to minw
-pointing=$(pointing.py ${obsid}.metafits)
+if [[ -z $pointing ]]; then
+  pointing=$(pointing.py ${obsid}.metafits)
+fi
 chgcentre ${obsid}.ms $pointing
 chgcentre -minw -shiftback ${obsid}.ms
 
 scale=$(echo "scale=6; 0.6 / $(getchan.py ${obsid}.metafits)" | bc)
-wsclean $absmem -mwa-path $BASEDIR -name ${obsid}-wsclean-${name} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1.5 -auto-mask 3 $options ${obsid}.ms
-
-# Create beam fits
-make_beam.py -f ${obsid}-wsclean-${name}-XX-image.fits -m ${obsid}.metafits --model 2016 --jones
-
-# Rename make_beam.py output for pbcorrect
-for file in $(ls | grep XX-image_beam.*\.fits); do
-  pol=$(echo $file | sed 's/.*image_beam\(.*\)\.fits/\1/' | tr '[:upper:]' '[:lower:]')
-  mv $file ${obsid}-beam-${pol}.fits
-done
-
-pbcorrect ${obsid}-wsclean-${name} image.fits ${obsid}-beam ${obsid}-${name}-stokes
+wsclean $absmem -mwa-path $BASEDIR -name ${obsid}-wsclean-${name} -apply-primary-beam -multiscale -mgain 0.85 -pol i -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1.5 -auto-mask 3 $options ${obsid}.ms
 
 mv image_${name}_started image_${name}_complete

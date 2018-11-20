@@ -56,19 +56,7 @@ chgcentre -minw -shiftback ${obsid}.ms
 
 # Do a shallow clean, to be used for selfcal
 scale=$(echo "scale=6; 0.6 / $(getchan.py ${obsid}.metafits)" | bc)
-wsclean -name ${obsid}-wsclean-${label} -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs -2 -size 8000 8000 -scale $scale -niter 300000 -auto-threshold 5 -auto-mask 8 $absmem ${obsid}.ms
-
-# Create beam fits
-make_beam.py -f ${obsid}-wsclean-${label}-XX-image.fits -m ${obsid}.metafits --model 2016 --jones
-
-# Rename make_beam.py output for pbcorrect
-for file in $(ls | grep XX-image_beam.*\.fits); do
-  pol=$(echo $file | sed 's/.*image_beam\(.*\)\.fits/\1/' | tr '[:upper:]' '[:lower:]')
-  mv $file ${obsid}-beam-${pol}.fits
-done
-
-# Output image of selfcal
-pbcorrect ${obsid}-wsclean-${label} image.fits ${obsid}-beam ${obsid}-${label}-stokes
+wsclean -name ${obsid}-wsclean-${label} -apply-primary-beam -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs -2 -size 7500 7500 -scale $scale -niter 300000 -auto-threshold 5 -auto-mask 8 -mwa-path $BASEDIR $absmem ${obsid}.ms
 
 # Selfcal
 calibrate -minuv 60 -j 20 -i 500 $absmem -mwa-path $BASEDIR -ch 4 ${obsid}.ms solutions-${label}.bin

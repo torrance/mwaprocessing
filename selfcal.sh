@@ -56,7 +56,21 @@ chgcentre -minw -shiftback ${obsid}.ms
 
 # Do a shallow clean, to be used for selfcal
 scale=$(echo "scale=6; 0.6 / $(getchan.py ${obsid}.metafits)" | bc)
-wsclean -name ${obsid}-wsclean-${label} -apply-primary-beam -multiscale -mgain 0.85 -pol xx,xy,yx,yy -joinpolarizations -weight briggs -2 -size 7500 7500 -scale $scale -niter 300000 -auto-threshold 5 -auto-mask 8 -mwa-path $BASEDIR $absmem ${obsid}.ms
+wsclean \
+  -name ${obsid}-wsclean-${label} \
+  -apply-primary-beam \
+  -multiscale \
+  -mgain 0.85
+  -pol i,q,u,v \
+  -weight briggs -2 \
+  -size 7500 7500 \
+  -scale $scale \
+  -niter 300000 \
+  -auto-threshold 5 \
+  -auto-mask 8 \
+  -mwa-path $BASEDIR \
+  $absmem \
+  ${obsid}.ms
 
 # Selfcal
 calibrate -minuv 60 -j 20 -i 500 $absmem -mwa-path $BASEDIR -ch 4 ${obsid}.ms solutions-${label}.bin

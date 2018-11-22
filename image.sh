@@ -83,6 +83,22 @@ chgcentre ${obsid}.ms $pointing
 chgcentre -minw -shiftback ${obsid}.ms
 
 scale=$(echo "scale=6; 0.6 / $(getchan.py ${obsid}.metafits)" | bc)
-wsclean $absmem -mwa-path $BASEDIR -name ${obsid}-wsclean-${name} -apply-primary-beam -multiscale -mgain 0.85 -pol i -weight $weight -minuv-l 15 -size $size $size -scale $scale -niter 300000 -auto-threshold 1.5 -auto-mask 3 $options ${obsid}.ms
+wsclean \
+  $absmem \
+  -mwa-path $BASEDIR \
+  -name ${obsid}-wsclean-${name} \
+  -apply-primary-beam \
+  -multiscale \
+  -mgain 0.85 \
+  -pol i,q,u,v \
+  -weight $weight \
+  -minuv-l 15 \
+  -size $size $size \
+  -scale $scale \
+  -niter 300000 \
+  -auto-threshold 1.5 \
+  -auto-mask 3 \
+  $options \
+  ${obsid}.ms
 
 mv image_${name}_started image_${name}_complete

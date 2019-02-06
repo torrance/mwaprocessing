@@ -1,6 +1,6 @@
 #! /bin/bash
 #SBATCH -M magnus
-#SBATCH --account pawsey0272
+#SBATCH -A pawsey0293
 #SBATCH --time=04:00:00
 #SBATCH --partition workq
 #SBATCH --nodes=1

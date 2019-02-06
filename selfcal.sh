@@ -1,6 +1,6 @@
 #! /bin/bash
 #SBATCH -M magnus
-#SBATCH --account pawsey0272
+#SBATCH -A pawsey0293
 #SBATCH --time=12:00:00
 #SBATCH --partition workq
 #SBATCH --nodes=1
@@ -60,15 +60,15 @@ wsclean \
   -name ${obsid}-wsclean-${label} \
   -apply-primary-beam \
   -multiscale \
-  -mgain 0.85
+  -mgain 0.85 \
   -pol i,q,u,v \
   -weight briggs -2 \
   -size 7500 7500 \
   -scale $scale \
-  -niter 300000 \
+  -niter 9999999 \
   -auto-threshold 5 \
-  -auto-mask 8 \
   -mwa-path $BASEDIR \
+  -nmiter 12 \
   $absmem \
   ${obsid}.ms
 

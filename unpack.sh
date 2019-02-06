@@ -9,7 +9,7 @@ if [[ -z $1 ]]; then
 fi
 obsid=$1
 
-if [[ -f ${obsid}_ms.zip && ! -f ${obsid}/download_started && ! -f ${obsid}/download_complete ]]; then
+if unzip -z ${obsid}_ms.zip && [[ ! -f ${obsid}/download_started && ! -f ${obsid}/download_complete ]]; then
   if [[ ! -d ${obsid} ]]; then
     mkdir $obsid
   fi

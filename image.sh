@@ -1,12 +1,16 @@
 #! /bin/bash
-#SBATCH -M magnus
-#SBATCH --account pawsey0272
+#SBATCH -M zeus
+#SBATCH -A pawsey0293
 #SBATCH --time=24:00:00
 #SBATCH --partition workq
 #SBATCH --nodes=1
+#SBATCH --cpus-per-task 14
+#SBATCH --mem 64G
 #SBATCH --mail-type FAIL,TIME_LIMIT,TIME_LIMIT_90
 #SBATCH --mail-user torrance.hodgson@postgrad.curtin.edu.au
 #SBATCH --export=ABSMEM,BASEDIR
+
+export PATH="/home/torrance/Zeus/workq/bin:$PATH"
 
 set -e
 set -x
@@ -88,16 +92,16 @@ wsclean \
   -mwa-path $BASEDIR \
   -name ${obsid}-wsclean-${name} \
   -apply-primary-beam \
-  -multiscale \
-  -mgain 0.85 \
+  -mgain 0.8 \
   -pol i,q,u,v \
   -weight $weight \
   -minuv-l 15 \
   -size $size $size \
   -scale $scale \
-  -niter 300000 \
+  -niter 9999999 \
   -auto-threshold 1.5 \
   -auto-mask 3 \
+  -nmiter 12 \
   $options \
   ${obsid}.ms
 

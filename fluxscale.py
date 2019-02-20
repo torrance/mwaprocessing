@@ -7,6 +7,9 @@ import sys
 from astropy.coordinates import SkyCoord
 import astropy.units as units
 from astropy.table import Table
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 import numpy as np
 
 

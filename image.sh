@@ -1,16 +1,16 @@
 #! /bin/bash
-#SBATCH -M zeus
+#SBATCH -M magnus
 #SBATCH -A pawsey0293
 #SBATCH --time=24:00:00
 #SBATCH --partition workq
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task 14
-#SBATCH --mem 64G
+##SBATCH --cpus-per-task 14
+##SBATCH --mem 60G
 #SBATCH --mail-type FAIL,TIME_LIMIT,TIME_LIMIT_90
 #SBATCH --mail-user torrance.hodgson@postgrad.curtin.edu.au
 #SBATCH --export=ABSMEM,BASEDIR
 
-export PATH="/home/torrance/Zeus/workq/bin:$PATH"
+source ~/.profile
 
 set -e
 set -x

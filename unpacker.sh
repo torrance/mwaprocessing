@@ -1,10 +1,10 @@
 #! /bin/bash
 #SBATCH -M zeus
-#SBATCH --time=12:00:00
-#SBATCH --partition workq
+#SBATCH -A pawsey0293
+#SBATCH --time=2:00:00
+#SBATCH --partition copyq
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=20
-#SBATCH -c 1
+#SBATCH --ntasks-per-node=12
 #SBATCH --mail-type FAIL,TIME_LIMIT,TIME_LIMIT_90
 #SBATCH --mail-user torrance.hodgson@postgrad.curtin.edu.au
 #SBATCH --export=ABSMEM

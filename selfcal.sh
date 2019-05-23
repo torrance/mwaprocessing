@@ -68,6 +68,9 @@ wsclean \
   -niter 9999999 \
   -auto-threshold 5 \
   -mwa-path $BASEDIR \
+  -channels-out 4 \
+  -fit-spectral-pol 3 \
+  -join-channels \
   -nmiter 12 \
   $absmem \
   ${obsid}.ms

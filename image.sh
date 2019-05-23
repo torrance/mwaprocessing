@@ -101,6 +101,9 @@ wsclean \
   -niter 9999999 \
   -auto-threshold 1.5 \
   -auto-mask 3 \
+  -channels-out 4 \
+  -fit-spectral-pol 4 \
+  -join-channels \
   -nmiter 12 \
   $options \
   ${obsid}.ms

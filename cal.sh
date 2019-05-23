@@ -103,7 +103,7 @@ calibrate $absmem $data -mwa-path $BASEDIR -minuv 60 -maxuv 2600 -m model.txt -a
 
 applysolutions ${obsid}.ms solutions-${label}.bin
 
-aoflagger ${obsid}.ms
+aoflagger -indirect-read ${obsid}.ms
 
 aocal_plot.py solutions-${label}.bin
 

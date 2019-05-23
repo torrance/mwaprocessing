@@ -35,10 +35,12 @@ rm ${obsid}-${label}-stokes*.fits || true
 rm ${obsid}-beam*.fits || true
 rm *.tmp || true
 
+# Flag data
+# Order matters here! aoflagger will UNFLAG any flagged tiles
+aoflagger -indirect-read ${obsid}.ms
+
 # Flag tiles if badantennae file is present
-if [[ -f badantennae ]]; then
-  cat badantennae | xargs flagantennae ${obsid}.ms
-fi
+cat badantennae | xargs -r --verbose flagantennae ${obsid}.ms
 
 # Apply previous calibration solution, if one is present
 # This is necessary when recovering from a failed job
@@ -46,8 +48,6 @@ if [[ ! -z $prior ]]; then
   applysolutions ${obsid}.ms solutions-${prior}.bin
 fi
 
-# Flag data
-aoflagger ${obsid}.ms
 
 # Change to pointing direction, then to minw
 pointing=$(pointing.py ${obsid}.metafits)
@@ -76,8 +76,6 @@ wsclean \
 calibrate -minuv 60 -j 20 -i 500 $absmem -mwa-path $BASEDIR -ch 4 ${obsid}.ms solutions-${label}.bin
 
 applysolutions ${obsid}.ms solutions-${label}.bin
-
-aoflagger ${obsid}.ms
 
 aocal_plot.py solutions-${label}.bin
 

@@ -39,6 +39,11 @@ rm *.tmp || true
 # Order matters here! aoflagger will UNFLAG any flagged tiles
 aoflagger -indirect-read ${obsid}.ms
 
+# Flag any tiles that MWA ops have flagged
+# This should be handled automatically but is a bug in Cotter at the moment
+flagged=$(getflaggedtiles.py ${obsid}.metafits)
+echo $flagged | xargs -r --verbose flagantennae ${obsid}.ms
+
 # Flag tiles if badantennae file is present
 cat badantennae | xargs -r --verbose flagantennae ${obsid}.ms
 
@@ -60,13 +65,12 @@ wsclean \
   -name ${obsid}-wsclean-${label} \
   -apply-primary-beam \
   -multiscale \
-  -mgain 0.85 \
-  -pol i,q,u,v \
+  -mgain 0.8 \
   -weight briggs -2 \
   -size 7500 7500 \
   -scale $scale \
   -niter 9999999 \
-  -auto-threshold 5 \
+  -stop-negative \
   -mwa-path $BASEDIR \
   -channels-out 4 \
   -fit-spectral-pol 3 \

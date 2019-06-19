@@ -1,6 +1,6 @@
 #! /bin/bash
 #SBATCH -M magnus
-#SBATCH -A pawsey0293
+#SBATCH -A pawsey0286
 #SBATCH --time=24:00:00
 #SBATCH --partition workq
 #SBATCH --nodes=1
@@ -35,14 +35,9 @@ rm ${obsid}-${label}-stokes*.fits || true
 rm ${obsid}-beam*.fits || true
 rm *.tmp || true
 
-# Flag data
-# Order matters here! aoflagger will UNFLAG any flagged tiles
-aoflagger -indirect-read ${obsid}.ms
-
 # Flag any tiles that MWA ops have flagged
-# This should be handled automatically but is a bug in Cotter at the moment
-flagged=$(getflaggedtiles.py ${obsid}.metafits)
-echo $flagged | xargs -r --verbose flagantennae ${obsid}.ms
+# This should be handled automatically but may have been undone by running aoflagger
+getflaggedtiles.py ${obsid}.metafits | xargs -r --verbose flagantennae ${obsid}.ms
 
 # Flag tiles if badantennae file is present
 cat badantennae | xargs -r --verbose flagantennae ${obsid}.ms
@@ -52,7 +47,6 @@ cat badantennae | xargs -r --verbose flagantennae ${obsid}.ms
 if [[ ! -z $prior ]]; then
   applysolutions ${obsid}.ms solutions-${prior}.bin
 fi
-
 
 # Change to pointing direction, then to minw
 pointing=$(pointing.py ${obsid}.metafits)
@@ -66,13 +60,13 @@ wsclean \
   -apply-primary-beam \
   -multiscale \
   -mgain 0.8 \
-  -weight briggs -2 \
+  -weight briggs 0 \
   -size 7500 7500 \
   -scale $scale \
   -niter 9999999 \
   -stop-negative \
   -mwa-path $BASEDIR \
-  -channels-out 4 \
+  -channels-out 8 \
   -fit-spectral-pol 3 \
   -join-channels \
   -nmiter 12 \
@@ -83,6 +77,13 @@ wsclean \
 calibrate -minuv 60 -j 20 -i 500 $absmem -mwa-path $BASEDIR -ch 4 ${obsid}.ms solutions-${label}.bin
 
 applysolutions ${obsid}.ms solutions-${label}.bin
+
+# Flag data
+# Order matters here! aoflagger will UNFLAG any flagged tiles
+# so we must repply our own flags again after
+aoflagger -indirect-read ${obsid}.ms
+getflaggedtiles.py ${obsid}.metafits | xargs -r --verbose flagantennae ${obsid}.ms
+cat badantennae | xargs -r --verbose flagantennae ${obsid}.ms
 
 aocal_plot.py solutions-${label}.bin
 

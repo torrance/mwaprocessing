@@ -1,6 +1,6 @@
 #! /bin/bash
 #SBATCH -M magnus
-#SBATCH -A pawsey0293
+#SBATCH -A pawsey0286
 #SBATCH --time=24:00:00
 #SBATCH --partition workq
 #SBATCH --nodes=1
@@ -93,7 +93,7 @@ wsclean \
   -name ${obsid}-wsclean-${name} \
   -apply-primary-beam \
   -mgain 0.8 \
-  -pol i,q,u,v \
+  -pol i \
   -weight $weight \
   -minuv-l 15 \
   -size $size $size \

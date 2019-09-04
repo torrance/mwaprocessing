@@ -45,18 +45,24 @@ def chisquared(arr, weights):
     return count / len(arr)
 
 
+def sigma(arr):
+    return 1.4286 * np.nanmedian(np.abs(arr - np.nanmedian(arr)))
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('mset')
-parser.add_argument('--antenna-sigma', type=float, default=3.5)
-parser.add_argument('--baseline-sigma', type=float, default=5)
+parser.add_argument('--antenna-sigma', type=float, default=3)
+parser.add_argument('--baseline-sigma', type=float, default=3)
 parser.add_argument('--data-column', default='CORRECTED_DATA')
 parser.add_argument('--model-column', default='MODEL_DATA')
+parser.add_argument('--minuv', type=float, default=60)
 args = parser.parse_args()
 
 # Extract data from measurement set
 print("Reading data into memory...", end="", file=sys.stderr); sys.stderr.flush()
 mset = table(args.mset, ack=False)
-tbl = taql("select * from $mset where ANTENNA1 <> ANTENNA2 and not FLAG_ROW")
+tbl = taql("select * from $mset where ANTENNA1 <> ANTENNA2 and not FLAG_ROW and sqrt(sumsqr(UVW[:2])) > %f" % args.minuv)
+
 
 data = tbl.getcol(args.data_column)
 model = tbl.getcol(args.model_column)
@@ -121,7 +127,7 @@ for a in range(128):
 print(" Done", file=sys.stderr)
 
 # Baselines
-threshold = np.nanmean(baselines) + args.baseline_sigma * np.nanstd(baselines)
+threshold = np.nanmean(baselines) + args.baseline_sigma * sigma(baselines)
 flagged = np.where(baselines > threshold)
 
 plt.figure(figsize=(16, 8))
@@ -144,7 +150,7 @@ with open('badbaselines.txt', 'w') as f:
 plt.figure(figsize=(12, 12))
 
 # Full
-threshold = np.nanmean(fulls) + args.antenna_sigma * np.nanstd(fulls)
+threshold = np.nanmean(fulls) + args.antenna_sigma * sigma(fulls)
 fullflagged = np.where(fulls > threshold)
 
 ax = plt.subplot(3, 1, 1)
@@ -154,7 +160,7 @@ plt.scatter(fullflagged, fulls[fullflagged])
 ax.axhline(threshold, linestyle='--')
 
 # Amps
-threshold = np.nanmean(amps) + args.antenna_sigma * np.nanstd(amps)
+threshold = np.nanmean(amps) + args.antenna_sigma * sigma(amps)
 ampflagged = np.where(amps > threshold)
 
 ax = plt.subplot(3, 1, 2)
@@ -164,7 +170,7 @@ plt.scatter(ampflagged, amps[ampflagged])
 ax.axhline(threshold, linestyle='--')
 
 # Phases
-threshold = np.nanmean(phases) + args.antenna_sigma * np.nanstd(phases)
+threshold = np.nanmean(phases) + args.antenna_sigma * sigma(phases)
 phaseflagged = np.where(phases > threshold)
 
 ax = plt.subplot(3, 1, 3)

@@ -5,9 +5,15 @@ import argparse
 import sys
 
 from casacore.tables import table, taql
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from numba import njit, prange, float32, float64, complex64
 import numpy as np
+
+
+# Hide > comparison warnings with NaN values
+np.warnings.filterwarnings('ignore')
 
 
 @njit(parallel=True)
@@ -65,6 +71,9 @@ print("Diffing data...", end="", file=sys.stderr); sys.stderr.flush()
 data[flags] = np.nan
 fulldiff, ampdiff, phasediff = differ(data, model)
 ampdiff, phasediff = ampdiff.real, phasediff.real
+del data
+del model
+del flags
 print(" Done", file=sys.stderr)
 
 baselines = np.zeros((128, 128))

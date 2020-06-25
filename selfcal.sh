@@ -2,6 +2,7 @@
 #SBATCH -M magnus
 #SBATCH -A pawsey0286
 #SBATCH --time=24:00:00
+#SBATCH --cpus-per-task 20
 #SBATCH --partition workq
 #SBATCH --nodes=1
 #SBATCH --mail-type FAIL,TIME_LIMIT,TIME_LIMIT_90
@@ -57,24 +58,27 @@ chgcentre -minw -shiftback ${obsid}.ms
 scale=$(echo "scale=6; 0.6 / $(getchan.py ${obsid}.metafits)" | bc)
 wsclean \
   -name ${obsid}-wsclean-${label} \
-  -apply-primary-beam \
   -multiscale \
   -mgain 0.8 \
   -weight briggs 0 \
-  -size 7500 7500 \
+  -size 8500 8500 \
   -scale $scale \
   -niter 9999999 \
-  -stop-negative \
+  -auto-threshold 10 \
   -mwa-path $BASEDIR \
   -channels-out 8 \
-  -fit-spectral-pol 3 \
+  -fit-spectral-pol 2 \
   -join-channels \
   -nmiter 12 \
+  -minuv-l 40 \
+  -padding 1.8 \
+  -nwlayers-factor 2 \
+  -deconvolution-channels 2 \
   $absmem \
   ${obsid}.ms
 
 # Selfcal
-calibrate -minuv 60 -j 20 -i 500 $absmem -mwa-path $BASEDIR -ch 4 ${obsid}.ms solutions-${label}.bin
+calibrate -minuv 100 -j 20 -i 500 $absmem -mwa-path $BASEDIR -ch 4 ${obsid}.ms solutions-${label}.bin
 
 applysolutions ${obsid}.ms solutions-${label}.bin
 
@@ -85,6 +89,6 @@ aoflagger -indirect-read ${obsid}.ms
 getflaggedtiles.py ${obsid}.metafits | xargs -r --verbose flagantennae ${obsid}.ms
 cat badantennae | xargs -r --verbose flagantennae ${obsid}.ms
 
-aocal_plot.py solutions-${label}.bin
+aocal_plot.py --amp_max 2 solutions-${label}.bin
 
 mv ${label}_started ${label}_complete

@@ -58,17 +58,17 @@ chgcentre -minw -shiftback ${obsid}.ms
 scale=$(echo "scale=6; 0.6 / $(getchan.py ${obsid}.metafits)" | bc)
 wsclean \
   -name ${obsid}-wsclean-${label} \
-  -multiscale \
   -mgain 0.8 \
   -weight briggs 0 \
   -size 8500 8500 \
   -scale $scale \
   -niter 9999999 \
-  -auto-threshold 10 \
+  -auto-threshold 8 \
   -mwa-path $BASEDIR \
   -channels-out 8 \
   -fit-spectral-pol 2 \
   -join-channels \
+  -pol xx,yy \
   -nmiter 12 \
   -minuv-l 40 \
   -padding 1.8 \

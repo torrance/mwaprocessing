@@ -108,12 +108,18 @@ def main():
         print("Done")
 
     # Load models
-    with open(args.model) as f:
-        models = model_parser(f)
-    print("Initialised %d model sources" % len(models))
+    if args.model:
+        with open(args.model) as f:
+            models = model_parser(f)
+            comps = [c for m in models for c in m.components]
+    elif args.aegean:
+        with open(args.aegean) as f:
+            comps = aegean_parser(f, midfreq)
+    else:
+        print("No model (--aegean or --model) specified", file=sys.stderr)
+        exit(1)
+    print("Initialised %d model sources" % len(comps))
 
-    # Initialise points based on beam values at the widefreqs
-    comps = [c for m in models for c in m.components]
 
     # Calculate Jones matrices for each model component
     # JBeams[widefreq, component, row, col]
@@ -160,7 +166,7 @@ def main():
         )
 
     # Group sources by a spatial threshold
-    threshold = (3 / 60) * np.pi / 180
+    threshold = (4 / 60) * np.pi / 180
     partitions = spatial_partition(sources, threshold)
 
     # Read data minus flagged rows
@@ -682,11 +688,11 @@ class Gaussian(object):
             self.YY0,
             self.YY1,
             self.YY2,
-            # self.major,
-            # self.minor,
-            # self.pa,
-            # self.ra,
-            # self.dec,
+            #self.major,
+            #self.minor,
+            #self.pa,
+            #self.ra,
+            #self.dec,
         ])
 
     @params.setter
@@ -697,11 +703,11 @@ class Gaussian(object):
         self.YY0 = p[3]
         self.YY1 = p[4]
         self.YY2 = p[5]
-        # self.major = p[6]
-        # self.minor = p[7]
-        # self.pa = p[8]
-        # self.ra = p[9]
-        # self.dec = p[10]
+        #self.major = p[6]
+        #self.minor = p[7]
+        #self.pa = p[8]
+        #self.ra = p[9]
+        #self.dec = p[10]
 
     def get_lm(self, ra0, dec0):
         return radec_to_lm(self.ra, self.dec, ra0, dec0)
@@ -859,19 +865,18 @@ def angular_separation(ra1, dec1, ra2, dec2):
     )
 
 
-def aegean_parser(f):
+def aegean_parser(f, freq):
     tbl = astropy.table.Table.read(f)
 
-    models = []
+    components = []
     for row in tbl:
         # Todo: add test for point source
         position = SkyCoord(row['ra'], row['dec'], unit=(u.degree, u.degree))
-        flux = np.array([[row['int_flux'], 0, 0, 0]])
+        flux = np.array([[freq, row['int_flux'], 0, 0, 0]])
         component = Component(position, flux)
-        model = Model(row['uuid'], [component])
-        models.append(model)
+        components.append(component)
 
-    return models
+    return components
 
 
 def model_parser(f):
@@ -979,7 +984,7 @@ class Component(object):
 
         logfreq = np.log(self.measurements.T[0])
         logflux = np.log(self.measurements.T[1])
-        self.coeffs = np.polyfit(logfreq, logflux, 3)
+        self.coeffs = np.polyfit(logfreq, logflux, min(len(logfreq) - 1, 3))
 
     @property
     def ra(self):
@@ -990,14 +995,13 @@ class Component(object):
         return self.position.dec.rad
 
     def flux(self, frequency):
-        c = self.coeffs
         logfreq = np.log(frequency)
-        return [np.exp(
-            c[0] * logfreq**3 +
-            c[1] * logfreq**2 +
-            c[2] * logfreq +
-            c[3]
-        ), 0, 0, 0]
+        logflux = 0
+
+        for i, c in enumerate(reversed(self.coeffs)):
+           logflux += c * logfreq**i
+
+        return [np.exp(logflux), 0, 0, 0]
 
 
 if __name__ == '__main__':

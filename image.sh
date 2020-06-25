@@ -99,13 +99,13 @@ wsclean \
   -size $size $size \
   -scale $scale \
   -niter 9999999 \
-  -auto-threshold 1 \
+  -auto-threshold 1.5 \
   -auto-mask 3 \
   -channels-out 4 \
-  -fit-spectral-pol 3 \
+  -fit-spectral-pol 2 \
   -join-channels \
   -nmiter 12 \
-  -multiscale \
+  -nwlayers-factor 3 \
   $options \
   ${obsid}.ms
 
